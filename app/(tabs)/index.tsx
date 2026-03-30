@@ -1,7 +1,7 @@
 import { StatusBar, View } from "react-native";
 
 // Components
-import Map from "@/components/map/map";
+import Map from "@/components/map/Map";
 
 export default function Index() {
   return (
