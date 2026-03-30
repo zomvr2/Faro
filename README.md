@@ -42,6 +42,27 @@ To learn more about developing your project with Expo, look at the following res
 - [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
 - [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
+## Appwrite setup
+
+This project is initialized to work with Appwrite for:
+
+- Storage uploads (report images)
+- Database documents (reports)
+- Realtime updates (new or updated reports)
+
+Create a `.env` file in the project root with the following values:
+
+```bash
+EXPO_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
+EXPO_PUBLIC_APPWRITE_PROJECT_ID=your_project_id
+EXPO_PUBLIC_APPWRITE_DATABASE_ID=your_database_id
+EXPO_PUBLIC_APPWRITE_REPORTS_COLLECTION_ID=your_reports_collection_id
+EXPO_PUBLIC_APPWRITE_REPORTS_BUCKET_ID=your_reports_bucket_id
+```
+
+Appwrite services are under `services/appwrite`.
+The RSS tab now reads reports and subscribes to realtime changes using that service layer.
+
 ## Join the community
 
 Join our community of developers creating universal apps.
