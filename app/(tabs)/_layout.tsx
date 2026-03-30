@@ -159,11 +159,11 @@ function TabsContent() {
           accessibilityLabel="Centrar mapa en mi ubicacion"
           style={({ pressed }) => ({
             position: "absolute",
-            right: 24,
+            right: TAB_BAR_SIDE_OFFSET,
             bottom: tabBarBottom + TAB_BAR_HEIGHT + MAP_CENTER_BUTTON_GAP,
             width: MAP_CENTER_BUTTON_SIZE,
             height: MAP_CENTER_BUTTON_SIZE,
-            borderRadius: MAP_CENTER_BUTTON_SIZE / 2,
+            borderRadius: MAP_CENTER_BUTTON_SIZE / 3,
             justifyContent: "center",
             alignItems: "center",
             backgroundColor: "rgba(0, 0, 0, 0.85)",
