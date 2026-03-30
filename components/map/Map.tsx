@@ -1,7 +1,28 @@
-import { Camera, MapView, UserLocation, UserTrackingMode, type CameraRef, type Location as MapLocation } from '@maplibre/maplibre-react-native';
+import { listLatestReports, subscribeToReports, type ReportCategory, type ReportDocument } from '@/services/appwrite';
+import {
+  Camera,
+  MapView,
+  MarkerView,
+  UserLocation,
+  UserTrackingMode,
+  type CameraRef,
+  type Location as MapLocation,
+} from '@maplibre/maplibre-react-native';
 import * as ExpoLocation from 'expo-location';
+import {
+  CircleAlertIcon,
+  DropletsIcon,
+  LightbulbIcon,
+  PawPrintIcon,
+  ShieldIcon,
+  TrafficConeIcon,
+  Trash2Icon,
+  UsersIcon,
+  Volume2Icon,
+  type LucideIcon,
+} from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, StyleSheet, View } from 'react-native';
+import { Alert, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useMapCameraControls } from './MapCameraContext';
 
 const OVERVIEW_COORDINATE: GeoJSON.Position = [-71.29, -29.95];
@@ -17,6 +38,20 @@ const LOGO_FADE_OUT_DURATION_MS = 260;
 const INTRO_LOGO_SIZE = 240;
 const INTRO_MAX_WAIT_MS = 5000;
 
+const CATEGORY_MARKER_STYLES: Record<
+  ReportCategory,
+  { label: string; color: string; Icon: LucideIcon }
+> = {
+  security: { label: 'ACTIVIDAD VECINAL', color: '#00B7FF', Icon: UsersIcon },
+  traffic: { label: 'INCIDENTE VIAL', color: '#C91F32', Icon: CircleAlertIcon },
+  infrastructure: { label: 'OBRAS EN VIA', color: '#E2A712', Icon: TrafficConeIcon },
+  lighting: { label: 'ALUMBRADO', color: '#F5C648', Icon: LightbulbIcon },
+  waste: { label: 'BASURA', color: '#4EBB68', Icon: Trash2Icon },
+  water: { label: 'AGUA', color: '#25A3FF', Icon: DropletsIcon },
+  noise: { label: 'RUIDOS', color: '#8D6ADE', Icon: Volume2Icon },
+  animals: { label: 'MASCOTAS', color: '#FF9A3C', Icon: PawPrintIcon },
+};
+
 export default function Map() {
   const cameraRef = useRef<CameraRef>(null);
   const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -25,7 +60,35 @@ export default function Map() {
   const [followUserLocation, setFollowUserLocation] = useState(false);
   const [introStarted, setIntroStarted] = useState(false);
   const [showIntroLogo, setShowIntroLogo] = useState(false);
+  const [reports, setReports] = useState<ReportDocument[]>([]);
   const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
+
+  useEffect(() => {
+    const loadReports = async () => {
+      try {
+        const latestReports = await listLatestReports(120);
+        setReports(latestReports);
+      } catch {
+        // Keep the map usable even if report loading fails.
+      }
+    };
+
+    void loadReports();
+
+    let unsubscribe: (() => void) | null = null;
+
+    try {
+      unsubscribe = subscribeToReports(() => {
+        void loadReports();
+      });
+    } catch {
+      // Realtime can fail if env is missing; fallback to initial load only.
+    }
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -178,6 +241,10 @@ export default function Map() {
     };
   }, [centerCameraOnUser, registerCenterOnUser, setIsMapIntroActive]);
 
+  const visibleReports = reports.filter((report) =>
+    Number.isFinite(report.lat) && Number.isFinite(report.lng)
+  );
+
   return (
     <View style={styles.container}>
       <MapView
@@ -209,6 +276,36 @@ export default function Map() {
           renderMode='native'
           androidRenderMode='compass'
         />
+
+        {visibleReports.map((report) => {
+          const markerStyle = CATEGORY_MARKER_STYLES[report.category] ?? {
+            label: report.category.toUpperCase(),
+            color: '#00B7FF',
+            Icon: ShieldIcon,
+          };
+
+          return (
+            <MarkerView
+              key={report.$id}
+              coordinate={[report.lng, report.lat]}
+              anchor={{ x: 0.5, y: 1 }}
+              allowOverlap
+            >
+              <View style={styles.markerContainer}>
+                <View style={[styles.markerIconCircle, { backgroundColor: markerStyle.color }]}> 
+                  <markerStyle.Icon size={18} color='#06121E' strokeWidth={2.6} />
+                </View>
+
+                <View style={styles.markerLabelPill}>
+                  <markerStyle.Icon size={12} color='#DCE8FF' strokeWidth={2.6} />
+                  <Text numberOfLines={1} style={styles.markerLabelText}>
+                    {markerStyle.label}
+                  </Text>
+                </View>
+              </View>
+            </MarkerView>
+          );
+        })}
       </MapView>
 
       {showIntroLogo ? (
@@ -240,5 +337,49 @@ const styles = StyleSheet.create({
   introLogo: {
     width: INTRO_LOGO_SIZE,
     height: INTRO_LOGO_SIZE,
+  },
+  markerContainer: {
+    alignItems: 'center',
+    width: 130,
+    paddingBottom: 4,
+  },
+  markerIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(8, 26, 42, 0.2)',
+    shadowColor: '#000',
+    shadowOpacity: 0.26,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  markerLabelPill: {
+    marginTop: 8,
+    backgroundColor: '#2E3A5D',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(149, 174, 220, 0.2)',
+    maxWidth: 126,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  markerLabelText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DCE8FF',
+    letterSpacing: 0.6,
   },
 });
