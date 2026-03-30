@@ -1,4 +1,5 @@
 import { TabBarIcon } from "@/components/TabBarIcon";
+import { MapCameraProvider, useMapCameraControls } from "@/components/map/MapCameraContext";
 import { BottomSheetModal, BottomSheetModalProvider, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Tabs } from "expo-router";
 import {
@@ -6,6 +7,7 @@ import {
   CircleAlertIcon,
   DropletsIcon,
   LightbulbIcon,
+  LocateFixedIcon,
   MapIcon,
   PawPrintIcon,
   PlusIcon,
@@ -23,16 +25,31 @@ import { ScrollView as GestureScrollView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const ICON_SIZE = 25;
+const TAB_BAR_HEIGHT = 64;
+const TAB_BAR_SIDE_OFFSET = 16;
+const TAB_BAR_MIN_BOTTOM = 20;
+const MAP_CENTER_BUTTON_SIZE = 54;
+const MAP_CENTER_BUTTON_GAP = 12;
 const CATEGORY_CARD_WIDTH = 160;
 const CATEGORY_CARD_GAP = 12;
 const CATEGORY_SNAP_INTERVAL = CATEGORY_CARD_WIDTH + CATEGORY_CARD_GAP;
 
 export default function TabLayout() {
+  return (
+    <MapCameraProvider>
+      <TabsContent />
+    </MapCameraProvider>
+  );
+}
+
+function TabsContent() {
   const insets = useSafeAreaInsets();
   const addSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ["100%"], []);
   const [selectedCategory, setSelectedCategory] = useState("Infraestructura");
   const [description, setDescription] = useState("");
+  const { canCenterOnUser, centerOnUser, isCenteredOnUser } = useMapCameraControls();
+  const tabBarBottom = Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM);
 
   const categories = useMemo(
     () => [
@@ -66,11 +83,11 @@ export default function TabLayout() {
           tabBarStyle: {
             paddingBottom: 0,
             position: "absolute",
-            left: 16,
-            right: 16,
-            bottom: Math.max(insets.bottom, 20),
+            left: TAB_BAR_SIDE_OFFSET,
+            right: TAB_BAR_SIDE_OFFSET,
+            bottom: tabBarBottom,
             borderRadius: 20,
-            height: 64,
+            height: TAB_BAR_HEIGHT,
             marginHorizontal: 16,
             elevation: 6,
             backgroundColor: "rgb(0, 0, 0, 0.8)",
@@ -132,6 +149,31 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+
+      {canCenterOnUser ? (
+        <Pressable
+          onPress={centerOnUser}
+          accessibilityRole="button"
+          accessibilityLabel="Centrar mapa en mi ubicacion"
+          style={({ pressed }) => ({
+            position: "absolute",
+            right: 24,
+            bottom: tabBarBottom + TAB_BAR_HEIGHT + MAP_CENTER_BUTTON_GAP,
+            width: MAP_CENTER_BUTTON_SIZE,
+            height: MAP_CENTER_BUTTON_SIZE,
+            borderRadius: MAP_CENTER_BUTTON_SIZE / 2,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            borderWidth: 1,
+            borderColor: "rgba(167, 184, 207, 0.4)",
+            elevation: 9,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          <LocateFixedIcon size={24} color={isCenteredOnUser ? "#25C7FF" : "#7E95B2"} />
+        </Pressable>
+      ) : null}
 
       <BottomSheetModal
         ref={addSheetRef}
