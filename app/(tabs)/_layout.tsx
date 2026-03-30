@@ -48,7 +48,7 @@ function TabsContent() {
   const snapPoints = useMemo(() => ["100%"], []);
   const [selectedCategory, setSelectedCategory] = useState("Infraestructura");
   const [description, setDescription] = useState("");
-  const { canCenterOnUser, centerOnUser, isCenteredOnUser } = useMapCameraControls();
+  const { canCenterOnUser, centerOnUser, isCenteredOnUser, isMapIntroActive } = useMapCameraControls();
   const tabBarBottom = Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM);
 
   const categories = useMemo(
@@ -80,18 +80,20 @@ function TabsContent() {
           headerShown: false,
           tabBarLabelPosition: "beside-icon",
           tabBarShowLabel: false,
-          tabBarStyle: {
-            paddingBottom: 0,
-            position: "absolute",
-            left: TAB_BAR_SIDE_OFFSET,
-            right: TAB_BAR_SIDE_OFFSET,
-            bottom: tabBarBottom,
-            borderRadius: 20,
-            height: TAB_BAR_HEIGHT,
-            marginHorizontal: 16,
-            elevation: 6,
-            backgroundColor: "rgb(0, 0, 0, 0.8)",
-          },
+          tabBarStyle: isMapIntroActive
+            ? { display: "none" }
+            : {
+                paddingBottom: 0,
+                position: "absolute",
+                left: TAB_BAR_SIDE_OFFSET,
+                right: TAB_BAR_SIDE_OFFSET,
+                bottom: tabBarBottom,
+                borderRadius: 20,
+                height: TAB_BAR_HEIGHT,
+                marginHorizontal: 16,
+                elevation: 6,
+                backgroundColor: "rgb(0, 0, 0, 0.8)",
+              },
         }}>
         <Tabs.Screen
           name="index"
@@ -150,7 +152,7 @@ function TabsContent() {
         />
       </Tabs>
 
-      {canCenterOnUser ? (
+      {canCenterOnUser && !isMapIntroActive ? (
         <Pressable
           onPress={centerOnUser}
           accessibilityRole="button"

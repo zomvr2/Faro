@@ -5,8 +5,10 @@ type CenterOnUserHandler = () => Promise<void> | void;
 type MapCameraContextValue = {
   canCenterOnUser: boolean;
   isCenteredOnUser: boolean;
+  isMapIntroActive: boolean;
   centerOnUser: () => Promise<void>;
   setIsCenteredOnUser: (isCenteredOnUser: boolean) => void;
+  setIsMapIntroActive: (isMapIntroActive: boolean) => void;
   registerCenterOnUser: (handler: CenterOnUserHandler | null) => void;
 };
 
@@ -15,6 +17,7 @@ const MapCameraContext = createContext<MapCameraContextValue | undefined>(undefi
 export function MapCameraProvider({ children }: PropsWithChildren) {
   const [centerOnUserHandler, setCenterOnUserHandler] = useState<CenterOnUserHandler | null>(null);
   const [isCenteredOnUser, setIsCenteredOnUser] = useState(false);
+  const [isMapIntroActive, setIsMapIntroActive] = useState(true);
 
   const centerOnUser = useCallback(async () => {
     if (!centerOnUserHandler) {
@@ -32,11 +35,13 @@ export function MapCameraProvider({ children }: PropsWithChildren) {
     () => ({
       canCenterOnUser: Boolean(centerOnUserHandler),
       isCenteredOnUser,
+      isMapIntroActive,
       centerOnUser,
       setIsCenteredOnUser,
+      setIsMapIntroActive,
       registerCenterOnUser,
     }),
-    [centerOnUser, centerOnUserHandler, isCenteredOnUser, registerCenterOnUser]
+    [centerOnUser, centerOnUserHandler, isCenteredOnUser, isMapIntroActive, registerCenterOnUser]
   );
 
   return <MapCameraContext.Provider value={value}>{children}</MapCameraContext.Provider>;

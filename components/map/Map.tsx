@@ -15,6 +15,7 @@ const LOGO_FADE_IN_DURATION_MS = 550;
 const LOGO_HOLD_DURATION_MS = 280;
 const LOGO_FADE_OUT_DURATION_MS = 260;
 const INTRO_LOGO_SIZE = 240;
+const INTRO_MAX_WAIT_MS = 5000;
 
 export default function Map() {
   const cameraRef = useRef<CameraRef>(null);
@@ -24,13 +25,14 @@ export default function Map() {
   const [followUserLocation, setFollowUserLocation] = useState(false);
   const [introStarted, setIntroStarted] = useState(false);
   const [showIntroLogo, setShowIntroLogo] = useState(false);
-  const { registerCenterOnUser, setIsCenteredOnUser } = useMapCameraControls();
+  const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
 
   useEffect(() => {
     const requestPermissions = async () => {
       const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
+        setIsMapIntroActive(false);
         Alert.alert(
           'Location permission required',
           'Enable location permissions to use live tracking and heading.'
@@ -39,7 +41,7 @@ export default function Map() {
     };
 
     requestPermissions();
-  }, []);
+  }, [setIsMapIntroActive]);
 
   useEffect(() => {
     return () => {
@@ -52,6 +54,14 @@ export default function Map() {
     const timerId = setTimeout(callback, delayMs);
     introTimersRef.current.push(timerId);
   }, []);
+
+  useEffect(() => {
+    setIsMapIntroActive(true);
+
+    queueIntroTimer(() => {
+      setIsMapIntroActive(false);
+    }, INTRO_MAX_WAIT_MS);
+  }, [queueIntroTimer, setIsMapIntroActive]);
 
   const startCameraIntro = useCallback((coordinate: GeoJSON.Position) => {
     queueIntroTimer(() => {
@@ -66,9 +76,10 @@ export default function Map() {
       queueIntroTimer(() => {
         setFollowUserLocation(true);
         setIsCenteredOnUser(true);
+        setIsMapIntroActive(false);
       }, INTRO_FLY_DURATION_MS);
     }, INTRO_DELAY_MS);
-  }, [queueIntroTimer, setIsCenteredOnUser]);
+  }, [queueIntroTimer, setIsCenteredOnUser, setIsMapIntroActive]);
 
   const handleUserLocationUpdate = useCallback((location: MapLocation) => {
     if (introStarted) {
@@ -81,6 +92,7 @@ export default function Map() {
     latestUserCoordinateRef.current = coordinate;
 
     setIntroStarted(true);
+    setIsMapIntroActive(true);
     setShowIntroLogo(true);
     introLogoOpacity.setValue(0);
 
@@ -106,7 +118,7 @@ export default function Map() {
       setShowIntroLogo(false);
       startCameraIntro(coordinate);
     });
-  }, [introLogoOpacity, introStarted, startCameraIntro]);
+  }, [introLogoOpacity, introStarted, setIsMapIntroActive, startCameraIntro]);
 
   const handleRegionWillChange = useCallback((event: any) => {
     const isGestureActive = Boolean(event?.properties?.gestures?.isGestureActive);
@@ -159,9 +171,10 @@ export default function Map() {
     registerCenterOnUser(centerCameraOnUser);
 
     return () => {
+      setIsMapIntroActive(false);
       registerCenterOnUser(null);
     };
-  }, [centerCameraOnUser, registerCenterOnUser]);
+  }, [centerCameraOnUser, registerCenterOnUser, setIsMapIntroActive]);
 
   return (
     <View style={styles.container}>
