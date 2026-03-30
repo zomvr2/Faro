@@ -26,6 +26,7 @@ export default function Map() {
       logoEnabled={false}
       mapStyle="https://tiles.openfreemap.org/styles/liberty"
       style={{ flex: 1 }}
+      tintColor="#1eaae1"
     >
       <Camera
         followUserLocation
