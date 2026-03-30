@@ -1,11 +1,22 @@
-import { Camera, MapView, UserLocation, requestAndroidLocationPermissions } from '@maplibre/maplibre-react-native';
-import React, { useEffect, useState } from 'react';
+import { Camera, MapView, UserLocation, UserTrackingMode } from '@maplibre/maplibre-react-native';
+import * as Location from 'expo-location';
+import React, { useEffect } from 'react';
+import { Alert } from 'react-native';
 
 export default function Map() {
-  const [coordinates, setCoordinates] = useState([-71.296, -29.929]);
-
   useEffect(() => {
-    requestAndroidLocationPermissions();
+    const requestPermissions = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location permission required',
+          'Enable location permissions to use live tracking and heading.'
+        );
+      }
+    };
+
+    requestPermissions();
   }, []);
 
   return (
@@ -17,16 +28,17 @@ export default function Map() {
       style={{ flex: 1 }}
     >
       <Camera
-        zoomLevel={10.8}
-        centerCoordinate={coordinates}
         followUserLocation
+        followUserMode={UserTrackingMode.FollowWithCourse}
         animationMode='flyTo'
         followZoomLevel={16}
+        followPitch={45}
       />
 
       <UserLocation
         showsUserHeadingIndicator
-        renderMode='normal'
+        renderMode='native'
+        androidRenderMode='compass'
       />
     </MapView>
   )
