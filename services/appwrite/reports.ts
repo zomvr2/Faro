@@ -3,6 +3,7 @@ import {
   Models,
   Query,
   RealtimeResponseEvent,
+  type UploadProgress,
 } from "react-native-appwrite";
 
 import {
@@ -52,6 +53,7 @@ export type UploadMediaInput = {
   fileName?: string;
   mimeType?: string;
   fileSize?: number;
+  onProgress?: (progress: UploadProgress) => void;
 };
 
 const getRealtimeChannel = () => {
@@ -94,6 +96,7 @@ export async function uploadReportMedia(input: UploadMediaInput): Promise<Models
       type: mimeType,
       size: fileSize,
     },
+    onProgress: input.onProgress,
   });
 }
 
