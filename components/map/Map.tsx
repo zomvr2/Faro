@@ -121,7 +121,9 @@ export default function Map() {
   }, [introLogoOpacity, introStarted, setIsMapIntroActive, startCameraIntro]);
 
   const handleRegionWillChange = useCallback((event: any) => {
-    const isGestureActive = Boolean(event?.properties?.gestures?.isGestureActive);
+    const isGestureActive = Boolean(
+      event?.properties?.isUserInteraction ?? event?.properties?.gestures?.isGestureActive
+    );
 
     if (!isGestureActive) {
       return;
