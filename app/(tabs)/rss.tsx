@@ -1,22 +1,23 @@
 import { getReportImageUrls, listLatestReports, subscribeToReports, type ReportDocument } from "@/services/appwrite";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
-  CalendarClockIcon,
-  CheckIcon,
-  CircleAlertIcon,
-  FlameIcon,
-  ImageIcon,
-  LightbulbIcon,
-  MapPinIcon,
-  RadioIcon,
-  ShieldIcon,
-  SirenIcon,
-  TrafficConeIcon,
-  Trash2Icon,
-  Volume2Icon,
-  XIcon,
-  type LucideIcon,
+    CalendarClockIcon,
+    CheckIcon,
+    CircleAlertIcon,
+    FlameIcon,
+    ImageIcon,
+    LightbulbIcon,
+    MapPinIcon,
+    RadioIcon,
+    ShieldIcon,
+    SirenIcon,
+    TrafficConeIcon,
+    Trash2Icon,
+    Volume2Icon,
+    XIcon,
+    type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
@@ -72,6 +73,7 @@ function formatRelativeDate(dateValue: string): string {
 
 export default function RssScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +180,7 @@ export default function RssScreen() {
         style={{ flex: 1 }}
         data={reports}
         keyExtractor={(item) => item.$id}
-        contentContainerStyle={{ gap: 10, paddingBottom: 24 }}
+        contentContainerStyle={{ gap: 10, paddingBottom: tabBarHeight + insets.bottom + 32 }}
         ListEmptyComponent={
           <View
             style={{
