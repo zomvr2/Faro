@@ -19,9 +19,9 @@ export const REPORT_CATEGORIES = [
   "infrastructure",
   "lighting",
   "waste",
-  "water",
+  "fire",
   "noise",
-  "animals",
+  "accident",
 ] as const;
 
 export const REPORT_STATUSES = ["active", "solved", "false"] as const;

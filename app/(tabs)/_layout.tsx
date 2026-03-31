@@ -13,20 +13,20 @@ import { BottomSheetModal, BottomSheetModalProvider, BottomSheetScrollView } fro
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
-import { Tabs } from "expo-router";
+import { Tabs, useSegments } from "expo-router";
 import {
   CameraIcon,
   ChevronsRightIcon,
   CircleAlertIcon,
-  DropletsIcon,
+  FlameIcon,
   ImageIcon,
   LightbulbIcon,
   LocateFixedIcon,
   MapIcon,
-  PawPrintIcon,
   PlusIcon,
   RssIcon,
   ShieldIcon,
+  SirenIcon,
   TrafficConeIcon,
   Trash2Icon,
   UploadIcon,
@@ -91,6 +91,7 @@ export default function TabLayout() {
 }
 
 function TabsContent() {
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const addSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ["100%"], []);
@@ -107,6 +108,7 @@ function TabsContent() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { canCenterOnUser, centerOnUser, isCenteredOnUser, isMapIntroActive } = useMapCameraControls();
   const tabBarBottom = Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM);
+  const isMapTabActive = segments.length === 1;
 
   useEffect(() => {
     return () => {
@@ -229,11 +231,11 @@ function TabsContent() {
       { value: "security" as const, label: "Seguridad", Icon: ShieldIcon },
       { value: "traffic" as const, label: "Transito", Icon: TrafficConeIcon },
       { value: "infrastructure" as const, label: "Infraestructura", Icon: CircleAlertIcon },
-      { value: "animals" as const, label: "Mascotas", Icon: PawPrintIcon },
+      { value: "accident" as const, label: "Accidente", Icon: SirenIcon },
       { value: "waste" as const, label: "Basura", Icon: Trash2Icon },
-      { value: "lighting" as const, label: "Alumbrado", Icon: LightbulbIcon },
+      { value: "lighting" as const, label: "Problema de luz", Icon: LightbulbIcon },
       { value: "noise" as const, label: "Ruidos", Icon: Volume2Icon },
-      { value: "water" as const, label: "Agua", Icon: DropletsIcon },
+      { value: "fire" as const, label: "Incendio", Icon: FlameIcon },
     ],
     []
   );
@@ -522,7 +524,7 @@ function TabsContent() {
         />
       </Tabs>
 
-      {canCenterOnUser && !isMapIntroActive ? (
+      {canCenterOnUser && !isMapIntroActive && isMapTabActive ? (
         <Pressable
           onPress={centerOnUser}
           accessibilityRole="button"

@@ -5,13 +5,13 @@ import {
   CalendarClockIcon,
   CheckIcon,
   CircleAlertIcon,
-  DropletsIcon,
+  FlameIcon,
   ImageIcon,
   LightbulbIcon,
   MapPinIcon,
-  PawPrintIcon,
   RadioIcon,
   ShieldIcon,
+  SirenIcon,
   TrafficConeIcon,
   Trash2Icon,
   Volume2Icon,
@@ -20,16 +20,17 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CATEGORY_META: Record<string, { label: string; color: string; Icon: LucideIcon }> = {
   security: { label: "Seguridad", color: "#00B7FF", Icon: ShieldIcon },
   traffic: { label: "Transito", color: "#F56A6A", Icon: TrafficConeIcon },
   infrastructure: { label: "Infraestructura", color: "#E2A712", Icon: CircleAlertIcon },
-  lighting: { label: "Alumbrado", color: "#F5C648", Icon: LightbulbIcon },
+  lighting: { label: "Problema de luz", color: "#F5C648", Icon: LightbulbIcon },
   waste: { label: "Basura", color: "#57C777", Icon: Trash2Icon },
-  water: { label: "Agua", color: "#42B8FF", Icon: DropletsIcon },
+  fire: { label: "Incendio", color: "#FF6A3D", Icon: FlameIcon },
   noise: { label: "Ruidos", color: "#9A7BFF", Icon: Volume2Icon },
-  animals: { label: "Mascotas", color: "#FFAA4D", Icon: PawPrintIcon },
+  accident: { label: "Accidente", color: "#A44A4A", Icon: SirenIcon },
 };
 
 const STATUS_META: Record<string, { label: string; color: string; Icon: LucideIcon }> = {
@@ -70,6 +71,7 @@ function formatRelativeDate(dateValue: string): string {
 }
 
 export default function RssScreen() {
+  const insets = useSafeAreaInsets();
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export default function RssScreen() {
         flex: 1,
         backgroundColor: "#050C18",
         paddingHorizontal: 16,
-        paddingTop: 20,
+        paddingTop: insets.top + 24,
       }}
     >
       <Text style={{ color: "#E7F0FF", fontSize: 26, fontWeight: "800", marginBottom: 16 }}>
@@ -173,6 +175,7 @@ export default function RssScreen() {
       ) : null}
 
       <FlatList
+        style={{ flex: 1 }}
         data={reports}
         keyExtractor={(item) => item.$id}
         contentContainerStyle={{ gap: 10, paddingBottom: 24 }}
