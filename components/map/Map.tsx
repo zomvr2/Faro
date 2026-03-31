@@ -18,6 +18,7 @@ import {
 import * as ExpoLocation from 'expo-location';
 import {
   Calendar,
+  CheckIcon,
   CircleAlertIcon,
   DropletsIcon,
   LightbulbIcon,
@@ -63,9 +64,9 @@ const CATEGORY_MARKER_STYLES: Record<
   ReportCategory,
   { label: string; color: string; Icon: LucideIcon }
 > = {
-  security: { label: 'ACTIVIDAD VECINAL', color: '#00B7FF', Icon: UsersIcon },
-  traffic: { label: 'INCIDENTE VIAL', color: '#C91F32', Icon: CircleAlertIcon },
-  infrastructure: { label: 'OBRAS EN VIA', color: '#E2A712', Icon: TrafficConeIcon },
+  security: { label: 'SEGURIDAD', color: '#00B7FF', Icon: UsersIcon },
+  traffic: { label: 'TRÁNSITO', color: '#C91F32', Icon: CircleAlertIcon },
+  infrastructure: { label: 'INFRAESTRUCTURA', color: '#E2A712', Icon: TrafficConeIcon },
   lighting: { label: 'ALUMBRADO', color: '#F5C648', Icon: LightbulbIcon },
   waste: { label: 'BASURA', color: '#4EBB68', Icon: Trash2Icon },
   water: { label: 'AGUA', color: '#25A3FF', Icon: DropletsIcon },
@@ -73,10 +74,10 @@ const CATEGORY_MARKER_STYLES: Record<
   animals: { label: 'MASCOTAS', color: '#FF9A3C', Icon: PawPrintIcon },
 };
 
-const STATUS_STYLES: Record<string, { label: string; color: string }> = {
-  active: { label: 'ACTIVO', color: '#4EBB68' },
-  solved: { label: 'RESUELTO', color: '#8EABC9' },
-  false: { label: 'FALSA ALARMA', color: '#C91F32' },
+const STATUS_STYLES: Record<string, { label: string; color: string; Icon: LucideIcon }> = {
+  active: { label: 'ACTIVO', color: '#F5C648', Icon: CircleAlertIcon },
+  solved: { label: 'SOLUCIONADO', color: '#4EBB68', Icon: CheckIcon },
+  false: { label: 'FALSO', color: '#C91F32', Icon: XIcon },
 };
 
 function toRadians(value: number): number {
@@ -382,6 +383,14 @@ export default function Map() {
     }
     : null;
 
+  const selectedStatusStyle = selectedReport
+    ? STATUS_STYLES[selectedReport.status] ?? {
+      label: selectedReport.status.toUpperCase(),
+      color: '#8FA7BD',
+      Icon: ShieldIcon,
+    }
+    : null;
+
   return (
     <View style={styles.container}>
       <MapView
@@ -466,12 +475,7 @@ export default function Map() {
                   <selectedMarkerStyle.Icon size={12} color='#06121E' strokeWidth={2.8} />
                   <Text style={styles.categoryBadgeText}>{selectedMarkerStyle.label}</Text>
                 </View>
-                <View style={styles.titleWithStatus}>
-                  <Text style={styles.reportTitle}>{selectedReport.description?.split('\n')[0] || 'Sin título'}</Text>
-                  <View style={[styles.statusChip, { backgroundColor: STATUS_STYLES[selectedReport.status]?.color }]}>
-                    <Text style={styles.statusChipText}>{STATUS_STYLES[selectedReport.status]?.label || selectedReport.status.toUpperCase()}</Text>
-                  </View>
-                </View>
+                <Text style={styles.reportTitle}>{selectedReport.description?.split('\n')[0] || 'Sin título'}</Text>
               </View>
               <Pressable onPress={closeReportModal} style={styles.closeButton} hitSlop={10}>
                 <XIcon color='#A7B8CF' size={20} />
@@ -484,6 +488,17 @@ export default function Map() {
                 <Text style={styles.metadataText}>{formatReportDate(selectedReport.$createdAt)}</Text>
               </View>
               <Text style={styles.metadataSeparator}>·</Text>
+              {selectedStatusStyle ? (
+                <>
+                  <View style={styles.metadataItem}>
+                    <selectedStatusStyle.Icon size={14} color={selectedStatusStyle.color} />
+                    <Text style={[styles.metadataText, styles.statusMetadataText, { color: selectedStatusStyle.color }]}> 
+                      {selectedStatusStyle.label}
+                    </Text>
+                  </View>
+                  <Text style={styles.metadataSeparator}>·</Text>
+                </>
+              ) : null}
               <View style={styles.metadataItem}>
                 <MapPin size={14} color='#8FA7BD' />
                 <Text style={styles.metadataText}>{selectedReportDistance}</Text>
@@ -509,10 +524,12 @@ export default function Map() {
             ) : null}
 
             <View style={styles.descriptionSection}>
-              <Text style={styles.descriptionTitle}>Descripción de la agencia</Text>
-              <Text style={styles.descriptionText}>
-                {selectedReport.description?.trim() || 'Sin descripcion'}
-              </Text>
+              <Text style={styles.descriptionTitle}>Descripción del reporte</Text>
+              <View style={styles.descriptionContainer}>
+                <Text style={styles.descriptionText}>
+                  {selectedReport.description?.trim() || 'Sin descripcion'}
+                </Text>
+              </View>
             </View>
 
             <Text style={styles.reportIdFooter}>{selectedReport.$id}</Text>
@@ -643,24 +660,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 28,
   },
-  titleWithStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-  },
-  statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    justifyContent: 'center',
-  },
-  statusChipText: {
-    color: '#06121E',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
   closeButton: {
     width: 38,
     height: 38,
@@ -684,6 +683,10 @@ const styles = StyleSheet.create({
     color: '#8FA7BD',
     fontSize: 13,
     fontWeight: '500',
+  },
+  statusMetadataText: {
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   metadataSeparator: {
     color: '#566E86',
@@ -723,19 +726,28 @@ const styles = StyleSheet.create({
   },
   descriptionSection: {
     marginTop: 10,
-    gap: 8,
+    gap: 12,
   },
   descriptionTitle: {
-    color: '#D5E4FB',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+    color: '#25C7FF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
+  descriptionContainer: {
+    minHeight: 120,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(125, 160, 195, 0.5)',
+    backgroundColor: 'rgba(14, 34, 70, 0.4)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   descriptionText: {
-    color: '#C5D8F2',
-    fontSize: 13,
-    lineHeight: 19,
+    color: '#D7E5FB',
+    fontSize: 15,
+    lineHeight: 22,
   },
   reportIdFooter: {
     color: '#576A82',
