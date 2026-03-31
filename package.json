@@ -8,7 +8,13 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "eas:build:dev": "eas build --profile dev",
+    "eas:build:preview": "eas build --profile preview",
+    "eas:build:production": "eas build --profile production",
+    "eas:update:dev": "eas update --branch development",
+    "eas:update:preview": "eas update --branch preview",
+    "eas:update:production": "eas update --branch production"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -32,6 +38,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
+    "expo-updates": "~29.0.16",
     "expo-web-browser": "~15.0.10",
     "lucide-react-native": "^1.7.0",
     "react": "19.1.0",
@@ -48,6 +55,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "eas-cli": "^18.4.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"

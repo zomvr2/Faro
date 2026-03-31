@@ -63,6 +63,40 @@ EXPO_PUBLIC_APPWRITE_REPORTS_BUCKET_ID=your_reports_bucket_id
 Appwrite services are under `services/appwrite`.
 The RSS tab now reads reports and subscribes to realtime changes using that service layer.
 
+## EAS Update
+
+This project is configured to use EAS Update with branch/channel mapping:
+
+- `development` branch -> `development` channel
+- `preview` branch -> `preview` channel
+- `production` branch -> `production` channel
+
+Build profiles are defined in `eas.json`:
+
+- `dev` (internal distribution, Android APK)
+- `preview` (internal distribution)
+- `production` (store-ready profile)
+
+### Typical flow
+
+1. Build once per channel/profile and install that binary on target devices:
+
+   ```bash
+   npm run eas:build:dev
+   npm run eas:build:preview
+   npm run eas:build:production
+   ```
+
+2. Publish OTA updates to the matching branch:
+
+   ```bash
+   npm run eas:update:dev
+   npm run eas:update:preview
+   npm run eas:update:production
+   ```
+
+Only binaries built with a matching runtime version can receive those updates.
+
 ## Join the community
 
 Join our community of developers creating universal apps.
