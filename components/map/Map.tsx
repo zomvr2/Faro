@@ -21,6 +21,7 @@ import {
   CheckIcon,
   CircleAlertIcon,
   DropletsIcon,
+  ImageIcon,
   LightbulbIcon,
   MapPin,
   PawPrintIcon,
@@ -37,10 +38,13 @@ import {
   Alert,
   Animated,
   Easing,
+  FlatList,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useMapCameraControls } from './MapCameraContext';
@@ -147,14 +151,18 @@ function formatReportDate(isoDate: string): string {
 export default function Map() {
   const cameraRef = useRef<CameraRef>(null);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const galleryListRef = useRef<FlatList<string>>(null);
   const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const latestUserCoordinateRef = useRef<GeoJSON.Position | null>(null);
+  const { width: galleryWidth, height: galleryHeight } = useWindowDimensions();
   const introLogoOpacity = useRef(new Animated.Value(0)).current;
   const [followUserLocation, setFollowUserLocation] = useState(false);
   const [introStarted, setIntroStarted] = useState(false);
   const [showIntroLogo, setShowIntroLogo] = useState(false);
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportDocument | null>(null);
+  const [isGalleryVisible, setIsGalleryVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
   const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
 
@@ -356,6 +364,8 @@ export default function Map() {
   const handleBottomSheetChange = useCallback((index: number) => {
     if (index === -1) {
       setSelectedReport(null);
+      setIsGalleryVisible(false);
+      setSelectedImageIndex(0);
     }
   }, []);
 
@@ -390,6 +400,33 @@ export default function Map() {
       Icon: ShieldIcon,
     }
     : null;
+
+  const openGalleryAtIndex = useCallback((index: number) => {
+    if (selectedReportImages.length === 0) {
+      return;
+    }
+
+    const safeIndex = Math.max(0, Math.min(index, selectedReportImages.length - 1));
+    setSelectedImageIndex(safeIndex);
+    setIsGalleryVisible(true);
+  }, [selectedReportImages.length]);
+
+  const closeGallery = useCallback(() => {
+    setIsGalleryVisible(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isGalleryVisible || selectedReportImages.length === 0) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      galleryListRef.current?.scrollToIndex({
+        index: selectedImageIndex,
+        animated: false,
+      });
+    });
+  }, [isGalleryVisible, selectedImageIndex, selectedReportImages.length]);
 
   return (
     <View style={styles.container}>
@@ -509,14 +546,17 @@ export default function Map() {
             {selectedReportImages.length > 0 ? (
               <View style={styles.mainImageSection}>
                 <View style={styles.mainImageContainer}>
-                  <Image
-                    source={{ uri: selectedReportImages[0] }}
-                    style={styles.mainImage}
-                  />
-                  {selectedReportImages.length > 1 && (
+                  <Pressable onPress={() => openGalleryAtIndex(0)}>
+                    <Image
+                      source={{ uri: selectedReportImages[0] }}
+                      style={styles.mainImage}
+                    />
+                  </Pressable>
+                  {selectedReportImages.length > 0 && (
                     <View style={styles.photoCountBadge}>
+                      <ImageIcon size={14} color='#D5E4FB' strokeWidth={2.2} />
                       <Text style={styles.photoCountText}>
-                        🖼 {selectedReportImages.length} Fotos
+                        {selectedReportImages.length} {selectedReportImages.length === 1 ? 'imagen' : 'imagenes'}
                       </Text>
                     </View>
                   )}
@@ -537,6 +577,65 @@ export default function Map() {
           </BottomSheetScrollView>
         ) : null}
       </BottomSheetModal>
+
+      <Modal
+        visible={isGalleryVisible}
+        transparent
+        animationType='fade'
+        onRequestClose={closeGallery}
+        statusBarTranslucent
+      >
+        <View style={styles.galleryOverlay}>
+          <View style={styles.galleryHeader}>
+            <View style={styles.galleryCounterChip}>
+              <ImageIcon size={14} color='#D5E4FB' strokeWidth={2.2} />
+              <Text style={styles.galleryCounterText}>
+                {selectedImageIndex + 1}/{Math.max(1, selectedReportImages.length)}
+              </Text>
+            </View>
+            <Pressable onPress={closeGallery} style={styles.galleryCloseButton} hitSlop={10}>
+              <XIcon color='#D5E4FB' size={21} />
+            </Pressable>
+          </View>
+
+          <FlatList
+            ref={galleryListRef}
+            data={selectedReportImages}
+            keyExtractor={(item, index) => `${item}-${index}`}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialNumToRender={1}
+            maxToRenderPerBatch={2}
+            windowSize={2}
+            getItemLayout={(_, index) => ({
+              length: galleryWidth,
+              offset: galleryWidth * index,
+              index,
+            })}
+            onScrollToIndexFailed={() => {
+              galleryListRef.current?.scrollToOffset({
+                offset: selectedImageIndex * galleryWidth,
+                animated: false,
+              });
+            }}
+            onMomentumScrollEnd={(event) => {
+              const offsetX = event.nativeEvent.contentOffset.x;
+              const nextIndex = Math.round(offsetX / Math.max(1, galleryWidth));
+              setSelectedImageIndex(Math.max(0, Math.min(nextIndex, selectedReportImages.length - 1)));
+            }}
+            renderItem={({ item }) => (
+              <View style={[styles.gallerySlide, { width: galleryWidth }]}> 
+                <Image
+                  source={{ uri: item }}
+                  style={[styles.galleryImage, { maxHeight: galleryHeight * 0.78 }]}
+                  resizeMode='contain'
+                />
+              </View>
+            )}
+          />
+        </View>
+      </Modal>
 
       {showIntroLogo ? (
         <View pointerEvents='none' style={styles.introOverlay}>
@@ -726,17 +825,70 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     left: 10,
-    backgroundColor: 'rgba(8, 21, 37, 0.8)',
+    backgroundColor: 'rgba(8, 21, 37, 0.62)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(200, 216, 242, 0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   photoCountText: {
     color: '#D5E4FB',
     fontSize: 11,
     fontWeight: '700',
+  },
+  galleryOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(3, 8, 14, 0.97)',
+    justifyContent: 'center',
+  },
+  galleryHeader: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    right: 16,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  galleryCounterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 216, 242, 0.28)',
+    backgroundColor: 'rgba(8, 21, 37, 0.62)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  galleryCounterText: {
+    color: '#D5E4FB',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  galleryCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 216, 242, 0.28)',
+    backgroundColor: 'rgba(8, 21, 37, 0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gallerySlide: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
   },
   descriptionSection: {
     marginTop: 10,
