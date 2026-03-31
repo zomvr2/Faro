@@ -13,6 +13,7 @@ import { BottomSheetModal, BottomSheetModalProvider, BottomSheetScrollView } fro
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
+import * as Notifications from "expo-notifications";
 import { Tabs, useSegments } from "expo-router";
 import {
   CameraIcon,
@@ -34,7 +35,7 @@ import {
   XIcon,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { ScrollView as GestureScrollView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -106,9 +107,72 @@ function TabsContent() {
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [userCoordinates, setUserCoordinates] = useState<Coordinates | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userCoordinatesRef = useRef<Coordinates | null>(null);
+  const notifiedReportIdsRef = useRef<Set<string>>(new Set());
   const { canCenterOnUser, centerOnUser, isCenteredOnUser, isMapIntroActive } = useMapCameraControls();
   const tabBarBottom = Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM);
   const isMapTabActive = segments.length === 1;
+
+  useEffect(() => {
+    userCoordinatesRef.current = userCoordinates;
+  }, [userCoordinates]);
+
+  useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+
+    const configureNotifications = async () => {
+      try {
+        const permissions = await Notifications.requestPermissionsAsync();
+
+        if (!permissions.granted) {
+          return;
+        }
+
+        if (Platform.OS === "android") {
+          await Notifications.setNotificationChannelAsync("nearby-reports", {
+            name: "Reportes cercanos",
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            sound: "default",
+          });
+        }
+      } catch {
+        // Keep app usable if notifications are unavailable.
+      }
+    };
+
+    void configureNotifications();
+  }, []);
+
+  const notifyNearbyReport = useCallback(async (report: ReportDocument) => {
+    if (notifiedReportIdsRef.current.has(report.$id)) {
+      return;
+    }
+
+    notifiedReportIdsRef.current.add(report.$id);
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Nuevo reporte cercano",
+          body: report.title?.trim() || "Se registro un incidente cerca de tu ubicacion.",
+          data: {
+            reportId: report.$id,
+          },
+        },
+        trigger: null,
+      });
+    } catch {
+      // Ignore scheduling errors so realtime updates continue working.
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -137,8 +201,37 @@ function TabsContent() {
     let unsubscribe: (() => void) | null = null;
 
     try {
-      unsubscribe = subscribeToReports(() => {
+      unsubscribe = subscribeToReports((event) => {
         void refreshReports();
+
+        const isCreateEvent = event.events.some((name) => name.endsWith(".create"));
+
+        if (!isCreateEvent) {
+          return;
+        }
+
+        const report = event.payload;
+
+        if (!report) {
+          return;
+        }
+
+        const coordinates = userCoordinatesRef.current;
+
+        if (!coordinates) {
+          return;
+        }
+
+        const distance = getDistanceMeters(coordinates, {
+          lat: report.lat,
+          lng: report.lng,
+        });
+
+        if (distance > NEARBY_REPORT_RADIUS_METERS) {
+          return;
+        }
+
+        void notifyNearbyReport(report);
       });
     } catch {
       // Keep app usable if realtime channel is unavailable.
@@ -148,7 +241,7 @@ function TabsContent() {
       isMounted = false;
       unsubscribe?.();
     };
-  }, []);
+  }, [notifyNearbyReport]);
 
   useEffect(() => {
     let isMounted = true;
@@ -384,7 +477,7 @@ function TabsContent() {
         accuracy: ExpoLocation.Accuracy.Balanced,
       });
 
-      await createReportDocument({
+      const createdReport = await createReportDocument({
         title: trimmedTitle,
         category: selectedCategory,
         description: trimmedDescription,
@@ -420,6 +513,8 @@ function TabsContent() {
               ).join(",")
             : "",
       });
+
+          notifiedReportIdsRef.current.add(createdReport.$id);
 
       setTitle("");
       setDescription("");
