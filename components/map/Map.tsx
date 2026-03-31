@@ -438,17 +438,18 @@ export default function Map() {
               allowOverlap
               onTouchEnd={() => openReportModal(report)}
             >
-              <View style={styles.markerContainer}>
+              <View collapsable={false} style={styles.markerContainer}>
                 <View style={[styles.markerIconCircle, { backgroundColor: markerStyle.color }]}> 
-                  <markerStyle.Icon size={18} color='#06121E' strokeWidth={2.6} />
+                  <markerStyle.Icon size={14} color='#06121E' strokeWidth={2.4} />
                 </View>
 
                 <View style={styles.markerLabelPill}>
-                  <markerStyle.Icon size={12} color='#DCE8FF' strokeWidth={2.6} />
                   <Text numberOfLines={1} style={styles.markerLabelText}>
                     {markerStyle.label}
                   </Text>
                 </View>
+
+                <View style={styles.markerTip} />
               </View>
             </MarkerView>
           );
@@ -569,13 +570,15 @@ const styles = StyleSheet.create({
   },
   markerContainer: {
     alignItems: 'center',
-    width: 130,
-    paddingBottom: 4,
+    width: 108,
+    minHeight: 78,
+    justifyContent: 'flex-end',
+    paddingBottom: 0,
   },
   markerIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -587,14 +590,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   markerLabelPill: {
-    marginTop: 8,
+    marginTop: 6,
     backgroundColor: '#2E3A5D',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(149, 174, 220, 0.2)',
-    maxWidth: 126,
+    maxWidth: 104,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -605,11 +608,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
+  markerTip: {
+    width: 0,
+    height: 0,
+    marginTop: 3,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#2E3A5D',
+  },
   markerLabelText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#DCE8FF',
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
   },
   bottomSheetHandle: {
     width: 42,
