@@ -1,15 +1,15 @@
 import {
-  ID,
-  Models,
-  Query,
-  RealtimeResponseEvent,
-  type UploadProgress,
+    ID,
+    Models,
+    Query,
+    RealtimeResponseEvent,
+    type UploadProgress,
 } from "react-native-appwrite";
 
 import {
-  getAppwriteClient,
-  getAppwriteDatabases,
-  getAppwriteStorage,
+    getAppwriteClient,
+    getAppwriteDatabases,
+    getAppwriteStorage,
 } from "@/services/appwrite/client";
 import { getAppwriteEnv } from "@/services/appwrite/env";
 
@@ -30,6 +30,7 @@ export type ReportCategory = (typeof REPORT_CATEGORIES)[number];
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
 export type ReportData = {
+  title: string;
   category: ReportCategory;
   description: string;
   lng: number;
@@ -40,6 +41,7 @@ export type ReportData = {
 };
 
 export type ReportDocument = Models.Document & {
+  title: string;
   description: string;
   category: ReportCategory;
   lng: number;
@@ -113,6 +115,7 @@ export async function createReportDocument(data: ReportData): Promise<ReportDocu
     env.reportsCollectionId,
     ID.unique(),
     {
+      title: data.title,
       category: data.category,
       description: data.description,
       lng: data.lng,

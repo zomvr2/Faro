@@ -108,6 +108,9 @@ export default function RssScreen() {
             <Text style={{ color: "#25C7FF", fontSize: 12, fontWeight: "700", textTransform: "uppercase" }}>
               {item.category}
             </Text>
+            <Text style={{ color: "#E7F0FF", fontSize: 17, fontWeight: "800" }}>
+              {item.title || "Sin titulo"}
+            </Text>
             <Text style={{ color: "#E7F0FF", fontSize: 15, fontWeight: "600" }}>{item.description}</Text>
             <Text style={{ color: "#A8C1DE", fontSize: 12, textTransform: "uppercase" }}>
               Estado: {item.status}

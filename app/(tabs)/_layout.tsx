@@ -95,6 +95,7 @@ function TabsContent() {
   const addSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ["100%"], []);
   const [selectedCategory, setSelectedCategory] = useState<ReportCategory>("infrastructure");
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia[]>([]);
   const [uploadProgressByUri, setUploadProgressByUri] = useState<Record<string, number>>({});
@@ -360,7 +361,13 @@ function TabsContent() {
       : 0;
 
   const handleSubmitReport = useCallback(async () => {
+    const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
+
+    if (!trimmedTitle) {
+      setSubmitError("Agrega un titulo antes de publicar.");
+      return;
+    }
 
     if (!trimmedDescription) {
       setSubmitError("Agrega una descripcion antes de publicar.");
@@ -376,6 +383,7 @@ function TabsContent() {
       });
 
       await createReportDocument({
+        title: trimmedTitle,
         category: selectedCategory,
         description: trimmedDescription,
         lng: location.coords.longitude,
@@ -411,6 +419,7 @@ function TabsContent() {
             : "",
       });
 
+      setTitle("");
       setDescription("");
       setSelectedCategory("infrastructure");
       setSelectedMedia([]);
@@ -423,7 +432,7 @@ function TabsContent() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [closeAddSheet, description, selectedCategory, selectedMedia, showToast]);
+  }, [closeAddSheet, description, selectedCategory, selectedMedia, showToast, title]);
 
   return (
     <BottomSheetModalProvider>
@@ -579,6 +588,39 @@ function TabsContent() {
             >
               <XIcon color="#A7B8CF" size={20} />
             </Pressable>
+          </View>
+
+          <View style={{ gap: 12 }}>
+            <Text
+              style={{
+                color: "#25C7FF",
+                fontSize: 12,
+                letterSpacing: 1.6,
+                fontWeight: "700",
+                textTransform: "uppercase",
+              }}
+            >
+              Titulo
+            </Text>
+
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Ej: Semaforo apagado en Av. Balmaceda"
+              placeholderTextColor="#7E95B2"
+              maxLength={120}
+              style={{
+                minHeight: 54,
+                borderRadius: 16,
+                borderWidth: 1.5,
+                borderColor: "rgba(125, 160, 195, 0.5)",
+                backgroundColor: "rgba(14, 34, 70, 0.4)",
+                color: "#D7E5FB",
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                fontSize: 15,
+              }}
+            />
           </View>
 
           <View style={{ gap: 12 }}>

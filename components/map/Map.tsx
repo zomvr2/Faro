@@ -513,7 +513,7 @@ export default function Map() {
                   <selectedMarkerStyle.Icon size={12} color='#06121E' strokeWidth={2.8} />
                   <Text style={styles.categoryBadgeText}>{selectedMarkerStyle.label}</Text>
                 </View>
-                <Text style={styles.reportTitle}>{selectedReport.description?.split('\n')[0] || 'Sin título'}</Text>
+                <Text style={styles.reportTitle}>{selectedReport.title?.trim() || 'Sin título'}</Text>
               </View>
               <Pressable onPress={closeReportModal} style={styles.closeButton} hitSlop={10}>
                 <XIcon color='#A7B8CF' size={20} />
