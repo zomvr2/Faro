@@ -47,7 +47,7 @@ export type ReportDocument = Models.Document & {
   lng: number;
   lat: number;
   status: ReportStatus;
-  images: string;
+  images: string | null;
 };
 
 export type UploadMediaInput = {
@@ -76,6 +76,10 @@ function normalizeImagesField(data: ReportData): string {
 }
 
 export function getReportImageUrls(report: Pick<ReportDocument, "images">): string[] {
+  if (typeof report.images !== "string") {
+    return [];
+  }
+
   return report.images
     .split(",")
     .map((url) => url.trim())

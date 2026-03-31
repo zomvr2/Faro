@@ -14,7 +14,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as ExpoLocation from "expo-location";
 import * as Notifications from "expo-notifications";
-import { Tabs, useSegments } from "expo-router";
+import { Tabs, useRouter, useSegments } from "expo-router";
 import {
   CameraIcon,
   ChevronsRightIcon,
@@ -49,7 +49,7 @@ const CATEGORY_CARD_WIDTH = 160;
 const CATEGORY_CARD_GAP = 12;
 const CATEGORY_SNAP_INTERVAL = CATEGORY_CARD_WIDTH + CATEGORY_CARD_GAP;
 const MAX_REPORT_IMAGES = 3;
-const NEARBY_REPORT_RADIUS_METERS = 1000;
+const NEARBY_REPORT_RADIUS_METERS = 500;
 
 type SelectedMedia = {
   uri: string;
@@ -92,6 +92,7 @@ export default function TabLayout() {
 }
 
 function TabsContent() {
+  const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
   const addSheetRef = useRef<BottomSheetModal>(null);
@@ -109,6 +110,7 @@ function TabsContent() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userCoordinatesRef = useRef<Coordinates | null>(null);
   const notifiedReportIdsRef = useRef<Set<string>>(new Set());
+  const lastHandledNotificationIdRef = useRef<string | null>(null);
   const { canCenterOnUser, centerOnUser, isCenteredOnUser, isMapIntroActive } = useMapCameraControls();
   const tabBarBottom = Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM);
   const isMapTabActive = segments.length === 1;
@@ -165,6 +167,8 @@ function TabsContent() {
           body: report.title?.trim() || "Se registro un incidente cerca de tu ubicacion.",
           data: {
             reportId: report.$id,
+            lat: report.lat,
+            lng: report.lng,
           },
         },
         trigger: null,
@@ -173,6 +177,64 @@ function TabsContent() {
       // Ignore scheduling errors so realtime updates continue working.
     }
   }, []);
+
+  const openReportFromNotification = useCallback(
+    (response: Notifications.NotificationResponse | null) => {
+      if (!response) {
+        return;
+      }
+
+      const notificationId = response.notification.request.identifier;
+
+      if (lastHandledNotificationIdRef.current === notificationId) {
+        return;
+      }
+
+      const data = response.notification.request.content.data;
+      const reportId = typeof data?.reportId === "string" ? data.reportId : null;
+
+      if (!reportId) {
+        return;
+      }
+
+      lastHandledNotificationIdRef.current = notificationId;
+
+      const lat = typeof data?.lat === "number" || typeof data?.lat === "string" ? String(data.lat) : undefined;
+      const lng = typeof data?.lng === "number" || typeof data?.lng === "string" ? String(data.lng) : undefined;
+
+      router.push({
+        pathname: "/(tabs)",
+        params: {
+          focus: Date.now().toString(),
+          reportId,
+          lat,
+          lng,
+        },
+      });
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      openReportFromNotification(response);
+    });
+
+    const syncLastResponse = async () => {
+      try {
+        const lastResponse = await Notifications.getLastNotificationResponseAsync();
+        openReportFromNotification(lastResponse);
+      } catch {
+        // Ignore response sync failures to avoid blocking app startup.
+      }
+    };
+
+    void syncLastResponse();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [openReportFromNotification]);
 
   useEffect(() => {
     return () => {
