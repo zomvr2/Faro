@@ -16,6 +16,7 @@ import {
   type Location as MapLocation,
 } from '@maplibre/maplibre-react-native';
 import * as ExpoLocation from 'expo-location';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Calendar,
   CheckIcon,
@@ -152,6 +153,7 @@ export default function Map() {
   const cameraRef = useRef<CameraRef>(null);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const galleryListRef = useRef<FlatList<string>>(null);
+  const lastHandledFocusRef = useRef<string | null>(null);
   const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const latestUserCoordinateRef = useRef<GeoJSON.Position | null>(null);
   const { width: galleryWidth, height: galleryHeight } = useWindowDimensions();
@@ -164,6 +166,8 @@ export default function Map() {
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
+  const params = useLocalSearchParams<{ focus?: string; reportId?: string; lat?: string; lng?: string }>();
+  const router = useRouter();
   const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
 
   useEffect(() => {
@@ -360,6 +364,63 @@ export default function Map() {
       bottomSheetRef.current?.present();
     });
   }, []);
+
+  useEffect(() => {
+    if (!params.focus) {
+      return;
+    }
+
+    const focusKey = String(params.focus);
+
+    if (lastHandledFocusRef.current === focusKey) {
+      return;
+    }
+
+    const targetReportId = params.reportId ? String(params.reportId) : null;
+    const targetLat = params.lat ? Number(params.lat) : Number.NaN;
+    const targetLng = params.lng ? Number(params.lng) : Number.NaN;
+    const hasValidCoordinates = Number.isFinite(targetLat) && Number.isFinite(targetLng);
+
+    const targetReport = targetReportId
+      ? reports.find((report) => report.$id === targetReportId) ?? null
+      : null;
+
+    if (!targetReport && targetReportId) {
+      return;
+    }
+
+    const centerCoordinate: GeoJSON.Position | null = targetReport
+      ? [targetReport.lng, targetReport.lat]
+      : hasValidCoordinates
+        ? [targetLng, targetLat]
+        : null;
+
+    if (!centerCoordinate) {
+      lastHandledFocusRef.current = focusKey;
+      router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
+      return;
+    }
+
+    lastHandledFocusRef.current = focusKey;
+    setFollowUserLocation(false);
+    setIsCenteredOnUser(false);
+
+    cameraRef.current?.setCamera({
+      centerCoordinate,
+      zoomLevel: USER_ZOOM_LEVEL,
+      pitch: USER_PITCH,
+      animationMode: 'flyTo',
+      animationDuration: RECENTER_FLY_DURATION_MS,
+    });
+
+    if (targetReport) {
+      queueIntroTimer(() => {
+        openReportModal(targetReport);
+      }, RECENTER_FLY_DURATION_MS + 60);
+    }
+
+    router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
+  }, [openReportModal, params.focus, params.lat, params.lng, params.reportId, queueIntroTimer, reports, router, setIsCenteredOnUser]);
 
   const handleBottomSheetChange = useCallback((index: number) => {
     if (index === -1) {
