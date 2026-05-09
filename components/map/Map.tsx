@@ -1,52 +1,52 @@
 import {
-  getReportImageUrls,
-  listLatestReports,
-  subscribeToReports,
-  type ReportCategory,
-  type ReportDocument,
+    getReportImageUrls,
+    listLatestReports,
+    subscribeToReports,
+    type ReportCategory,
+    type ReportDocument,
 } from '@/services/appwrite';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import {
-  Camera,
-  MapView,
-  MarkerView,
-  UserLocation,
-  UserTrackingMode,
-  type CameraRef,
-  type Location as MapLocation,
+    Camera,
+    MapView,
+    MarkerView,
+    UserLocation,
+    UserTrackingMode,
+    type CameraRef,
+    type Location as MapLocation,
 } from '@maplibre/maplibre-react-native';
 import * as ExpoLocation from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  Calendar,
-  CheckIcon,
-  CircleAlertIcon,
-  FlameIcon,
-  ImageIcon,
-  LightbulbIcon,
-  MapPin,
-  ShieldIcon,
-  SirenIcon,
-  TrafficConeIcon,
-  Trash2Icon,
-  UsersIcon,
-  Volume2Icon,
-  XIcon,
-  type LucideIcon,
+    Calendar,
+    CheckIcon,
+    CircleAlertIcon,
+    FlameIcon,
+    ImageIcon,
+    LightbulbIcon,
+    MapPin,
+    ShieldIcon,
+    SirenIcon,
+    TrafficConeIcon,
+    Trash2Icon,
+    UsersIcon,
+    Volume2Icon,
+    XIcon,
+    type LucideIcon,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Easing,
-  FlatList,
-  Image,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    Alert,
+    Animated,
+    Easing,
+    FlatList,
+    Image,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 import { useMapCameraControls } from './MapCameraContext';
 
@@ -291,11 +291,10 @@ export default function Map() {
   }, [introLogoOpacity, introStarted, setIsMapIntroActive, startCameraIntro]);
 
   const handleRegionWillChange = useCallback((event: any) => {
-    const isGestureActive = Boolean(
-      event?.properties?.isUserInteraction ?? event?.properties?.gestures?.isGestureActive
-    );
+    // Only disable follow mode for direct user map interactions.
+    const isUserInteraction = event?.properties?.isUserInteraction === true;
 
-    if (!isGestureActive) {
+    if (!isUserInteraction) {
       return;
     }
 
@@ -352,7 +351,7 @@ export default function Map() {
     Number.isFinite(report.lat) && Number.isFinite(report.lng)
   );
 
-  const bottomSheetSnapPoints = ['28%', '82%'];
+  const bottomSheetSnapPoints = ['55%', '92%'];
 
   const closeReportModal = useCallback(() => {
     bottomSheetRef.current?.dismiss();
@@ -509,7 +508,7 @@ export default function Map() {
             animationDuration: 1200,
           }}
           followUserLocation={followUserLocation}
-          followUserMode={UserTrackingMode.FollowWithCourse}
+          followUserMode={UserTrackingMode.Follow}
           followZoomLevel={USER_ZOOM_LEVEL}
           followPitch={USER_PITCH}
         />
@@ -556,6 +555,7 @@ export default function Map() {
 
       <BottomSheetModal
         ref={bottomSheetRef}
+        index={1}
         snapPoints={bottomSheetSnapPoints}
         onChange={handleBottomSheetChange}
         enablePanDownToClose
