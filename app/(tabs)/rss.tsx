@@ -41,6 +41,7 @@ const STATUS_META: Record<string, { label: string; color: string; Icon: LucideIc
 };
 
 const TAB_BAR_HEIGHT = 68;
+const POSSIBLY_FALSE_RATING_THRESHOLD = -3;
 
 function formatRelativeDate(dateValue: string): string {
   const timestamp = Date.parse(dateValue);
@@ -71,6 +72,31 @@ function formatRelativeDate(dateValue: string): string {
   }
 
   return new Intl.DateTimeFormat("es-CL", { day: "2-digit", month: "short" }).format(new Date(timestamp));
+}
+
+function getReportRating(report: Pick<ReportDocument, "rating">): number {
+  const rating = report.rating;
+  return typeof rating === "number" && Number.isFinite(rating) ? rating : 0;
+}
+
+function formatTruthfulnessScore(rating: number): string {
+  return rating > 0 ? `+${rating}` : String(rating);
+}
+
+function getTruthfulnessMeta(rating: number): { accessibilityLabel: string; color: string; Icon: LucideIcon } {
+  if (rating <= POSSIBLY_FALSE_RATING_THRESHOLD) {
+    return { accessibilityLabel: "Posiblemente falso", color: "#FF8B8B", Icon: CircleAlertIcon };
+  }
+
+  if (rating < 0) {
+    return { accessibilityLabel: "Veracidad en duda", color: "#FFB35C", Icon: CircleAlertIcon };
+  }
+
+  if (rating > 0) {
+    return { accessibilityLabel: "Veracidad positiva", color: "#57C777", Icon: CheckIcon };
+  }
+
+  return { accessibilityLabel: "Sin votos de veracidad", color: "#A8C1DE", Icon: ShieldIcon };
 }
 
 export default function RssScreen() {
@@ -195,6 +221,8 @@ export default function RssScreen() {
             };
           const primaryImage = imageUrls[0] ?? null;
           const extraImages = Math.max(0, imageUrls.length - 1);
+          const truthfulnessRating = getReportRating(item);
+          const truthfulnessMeta = getTruthfulnessMeta(truthfulnessRating);
 
           return (
             <Pressable
@@ -248,9 +276,24 @@ export default function RssScreen() {
                     <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
                   </View>
 
-                  <View style={styles.timeMeta}>
-                    <CalendarClockIcon size={13} color="#9B9B9B" />
-                    <Text style={styles.timeMetaText}>{formatRelativeDate(item.$createdAt)}</Text>
+                  <View style={styles.cardMetaRight}>
+                    <View style={styles.timeMeta}>
+                      <CalendarClockIcon size={13} color="#9B9B9B" />
+                      <Text style={styles.timeMetaText} numberOfLines={1}>
+                        {formatRelativeDate(item.$createdAt)}
+                      </Text>
+                    </View>
+
+                    <View
+                      accessible
+                      accessibilityLabel={`${truthfulnessMeta.accessibilityLabel}: ${formatTruthfulnessScore(truthfulnessRating)}`}
+                      style={styles.truthfulnessInline}
+                    >
+                      <truthfulnessMeta.Icon size={13} color={truthfulnessMeta.color} strokeWidth={2.8} />
+                      <Text style={[styles.truthfulnessInlineText, { color: truthfulnessMeta.color }]}>
+                        {formatTruthfulnessScore(truthfulnessRating)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -487,17 +530,40 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
-  timeMeta: {
+  cardMetaRight: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
+    minWidth: 0,
+    gap: 10,
+  },
+  timeMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 5,
+    flexShrink: 1,
+    minWidth: 0,
   },
   timeMetaText: {
     color: "#9B9B9B",
     fontSize: 12,
     fontWeight: "700",
+    flexShrink: 1,
+  },
+  truthfulnessInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    flexShrink: 0,
+  },
+  truthfulnessInlineText: {
+    fontSize: 12,
+    fontWeight: "900",
+    minWidth: 18,
+    textAlign: "right",
   },
   cardTitle: {
     color: "#FFFFFF",

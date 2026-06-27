@@ -30,6 +30,7 @@ export const REPORT_STATUSES = ["active", "solved", "false"] as const;
 
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number];
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
+export type ReportRatingVote = "truthful" | "false";
 
 export type ReportData = {
   title: string;
@@ -50,6 +51,7 @@ export type ReportDocument = Models.Document & {
   lat: number;
   status: ReportStatus;
   images: string | null;
+  rating: number | null;
 };
 
 export type UploadMediaInput = {
@@ -87,6 +89,10 @@ export function getReportImageUrls(report: Pick<ReportDocument, "images">): stri
     .map((url) => url.trim())
     .filter(Boolean)
     .slice(0, 3);
+}
+
+function normalizeReportRating(rating: ReportDocument["rating"]): number {
+  return typeof rating === "number" && Number.isFinite(rating) ? rating : 0;
 }
 
 export async function uploadReportMedia(input: UploadMediaInput): Promise<Models.File> {
@@ -166,8 +172,53 @@ export async function createReportDocument(data: ReportData): Promise<ReportDocu
       lat: data.lat,
       status: data.status ?? "active",
       images: normalizeImagesField(data),
+      rating: 0,
     }
   );
+}
+
+export async function voteReportRating(
+  reportId: string,
+  vote: ReportRatingVote
+): Promise<ReportDocument> {
+  const env = getAppwriteEnv();
+  const databases = getAppwriteDatabases();
+  const voteDelta = vote === "truthful" ? 1 : -1;
+
+  try {
+    if (voteDelta > 0) {
+      return await databases.incrementDocumentAttribute<ReportDocument>(
+        env.databaseId,
+        env.reportsCollectionId,
+        reportId,
+        "rating",
+        1
+      );
+    }
+
+    return await databases.decrementDocumentAttribute<ReportDocument>(
+      env.databaseId,
+      env.reportsCollectionId,
+      reportId,
+      "rating",
+      1
+    );
+  } catch {
+    const report = await databases.getDocument<ReportDocument>(
+      env.databaseId,
+      env.reportsCollectionId,
+      reportId
+    );
+
+    return databases.updateDocument<ReportDocument>(
+      env.databaseId,
+      env.reportsCollectionId,
+      reportId,
+      {
+        rating: normalizeReportRating(report.rating) + voteDelta,
+      }
+    );
+  }
 }
 
 export async function listLatestReports(limit = 25): Promise<ReportDocument[]> {

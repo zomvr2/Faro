@@ -2,8 +2,10 @@ import {
     getReportImageUrls,
     listLatestReports,
     subscribeToReports,
+    voteReportRating,
     type ReportCategory,
     type ReportDocument,
+    type ReportRatingVote,
 } from '@/services/appwrite';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import {
@@ -77,6 +79,7 @@ const LOGO_HOLD_DURATION_MS = 280;
 const LOGO_FADE_OUT_DURATION_MS = 260;
 const INTRO_LOGO_SIZE = 240;
 const INTRO_MAX_WAIT_MS = 5000;
+const POSSIBLY_FALSE_RATING_THRESHOLD = -3;
 
 const EARTH_RADIUS_METERS = 6371000;
 
@@ -149,6 +152,35 @@ function getStatusDetail(status: string): string {
   }
 
   return 'Reporte en revision';
+}
+
+function getReportRating(report: Pick<ReportDocument, 'rating'>): number {
+  const rating = report.rating;
+  return typeof rating === 'number' && Number.isFinite(rating) ? rating : 0;
+}
+
+function isReportPossiblyFalse(report: Pick<ReportDocument, 'rating'>): boolean {
+  return getReportRating(report) <= POSSIBLY_FALSE_RATING_THRESHOLD;
+}
+
+function formatTruthfulnessScore(rating: number): string {
+  return rating > 0 ? `+${rating}` : String(rating);
+}
+
+function getTruthfulnessLabel(rating: number): string {
+  if (rating <= POSSIBLY_FALSE_RATING_THRESHOLD) {
+    return 'Posiblemente falso';
+  }
+
+  if (rating < 0) {
+    return 'Veracidad en duda';
+  }
+
+  if (rating > 0) {
+    return 'Veracidad positiva';
+  }
+
+  return 'Sin votos de veracidad';
 }
 
 function formatReportDate(isoDate: string): string {
@@ -245,6 +277,7 @@ export default function Map() {
   const [showIntroLogo, setShowIntroLogo] = useState(false);
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportDocument | null>(null);
+  const [pendingVoteReportId, setPendingVoteReportId] = useState<string | null>(null);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
@@ -259,6 +292,13 @@ export default function Map() {
       try {
         const latestReports = await listLatestReports(120);
         setReports(latestReports);
+        setSelectedReport((currentReport) => {
+          if (!currentReport) {
+            return null;
+          }
+
+          return latestReports.find((report) => report.$id === currentReport.$id) ?? currentReport;
+        });
       } catch {
         // Keep the map usable even if report loading fails.
       }
@@ -586,6 +626,9 @@ export default function Map() {
     ? formatDistance(haversineDistanceMeters(userCoordinate, [selectedReport.lng, selectedReport.lat]))
     : 'No disponible';
 
+  const selectedReportRating = selectedReport ? getReportRating(selectedReport) : 0;
+  const selectedReportIsPossiblyFalse = selectedReport ? isReportPossiblyFalse(selectedReport) : false;
+  const isSelectedReportVoting = selectedReport ? pendingVoteReportId === selectedReport.$id : false;
   const selectedReportImages = selectedReport ? getReportImageUrls(selectedReport) : [];
 
   const selectedMarkerStyle = selectedReport
@@ -618,12 +661,50 @@ export default function Map() {
     setIsGalleryVisible(false);
   }, []);
 
-  const handleVotePlaceholder = useCallback((vote: 'veridico' | 'falso') => {
-    Alert.alert(
-      'Votaciones',
-      `El voto ${vote} quedara disponible en la proxima implementacion.`
+  const handleReportVote = useCallback(async (vote: ReportRatingVote) => {
+    if (!selectedReport || pendingVoteReportId) {
+      return;
+    }
+
+    const reportId = selectedReport.$id;
+    const previousReport = selectedReport;
+    const voteDelta = vote === 'truthful' ? 1 : -1;
+    const optimisticReport = {
+      ...selectedReport,
+      rating: getReportRating(selectedReport) + voteDelta,
+    };
+
+    setPendingVoteReportId(reportId);
+    setSelectedReport(optimisticReport);
+    setReports((currentReports) =>
+      currentReports.map((report) => (report.$id === reportId ? optimisticReport : report))
     );
-  }, []);
+
+    try {
+      const updatedReport = await voteReportRating(reportId, vote);
+
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? updatedReport : report))
+      );
+      setSelectedReport((currentReport) =>
+        currentReport?.$id === reportId ? updatedReport : currentReport
+      );
+    } catch (error) {
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? previousReport : report))
+      );
+      setSelectedReport((currentReport) =>
+        currentReport?.$id === reportId ? previousReport : currentReport
+      );
+
+      Alert.alert(
+        'No se pudo registrar el voto',
+        error instanceof Error ? error.message : 'Intentalo nuevamente en unos segundos.'
+      );
+    } finally {
+      setPendingVoteReportId((currentReportId) => (currentReportId === reportId ? null : currentReportId));
+    }
+  }, [pendingVoteReportId, selectedReport]);
 
   useEffect(() => {
     if (!isGalleryVisible || selectedReportImages.length === 0) {
@@ -672,6 +753,7 @@ export default function Map() {
             color: '#00B7FF',
             Icon: ShieldIcon,
           };
+          const isPossiblyFalse = isReportPossiblyFalse(report);
 
           return (
             <Marker
@@ -685,6 +767,15 @@ export default function Map() {
                 <View style={[styles.markerIconCircle, { backgroundColor: markerStyle.color }]}> 
                   <markerStyle.Icon size={14} color='#06121E' strokeWidth={2.4} />
                 </View>
+
+                {isPossiblyFalse ? (
+                  <View style={styles.markerWarningPill}>
+                    <CircleAlertIcon size={10} color='#FFB4B4' strokeWidth={2.8} />
+                    <Text numberOfLines={1} style={styles.markerWarningText}>
+                      DUDOSO
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={styles.markerLabelPill}>
                   <Text numberOfLines={1} style={styles.markerLabelText}>
@@ -821,14 +912,57 @@ export default function Map() {
                 </View>
               ) : null}
 
+              {selectedReportIsPossiblyFalse ? (
+                <View style={styles.truthWarningBanner}>
+                  <CircleAlertIcon size={20} color='#FF8B8B' strokeWidth={2.8} />
+                  <View style={styles.truthWarningCopy}>
+                    <Text style={styles.truthWarningTitle}>Posiblemente falso</Text>
+                    <Text style={styles.truthWarningText}>
+                      Este reporte acumula varios votos negativos. Se mantiene visible como advertencia.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.truthfulnessPanel}>
+                <View
+                  style={[
+                    styles.truthfulnessScoreBadge,
+                    selectedReportRating < 0 && styles.truthfulnessScoreBadgeNegative,
+                    selectedReportRating > 0 && styles.truthfulnessScoreBadgePositive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.truthfulnessScoreText,
+                      selectedReportRating < 0 && styles.truthfulnessScoreTextNegative,
+                      selectedReportRating > 0 && styles.truthfulnessScoreTextPositive,
+                    ]}
+                  >
+                    {formatTruthfulnessScore(selectedReportRating)}
+                  </Text>
+                </View>
+
+                <View style={styles.truthfulnessCopy}>
+                  <Text style={styles.truthfulnessLabel}>
+                    {getTruthfulnessLabel(selectedReportRating)}
+                  </Text>
+                  <Text style={styles.truthfulnessText}>Puntaje de veracidad de la comunidad</Text>
+                </View>
+              </View>
+
               <View style={styles.voteActions}>
                 <Pressable
                   accessibilityRole='button'
                   accessibilityLabel='Marcar reporte como veridico'
-                  onPress={() => handleVotePlaceholder('veridico')}
+                  disabled={isSelectedReportVoting}
+                  onPress={() => {
+                    void handleReportVote('truthful');
+                  }}
                   style={({ pressed }) => [
                     styles.voteButton,
                     styles.truthVoteButton,
+                    isSelectedReportVoting && styles.voteButtonDisabled,
                     pressed && styles.voteButtonPressed,
                   ]}
                 >
@@ -839,10 +973,14 @@ export default function Map() {
                 <Pressable
                   accessibilityRole='button'
                   accessibilityLabel='Marcar reporte como falso'
-                  onPress={() => handleVotePlaceholder('falso')}
+                  disabled={isSelectedReportVoting}
+                  onPress={() => {
+                    void handleReportVote('false');
+                  }}
                   style={({ pressed }) => [
                     styles.voteButton,
                     styles.falseVoteButton,
+                    isSelectedReportVoting && styles.voteButtonDisabled,
                     pressed && styles.voteButtonPressed,
                   ]}
                 >
@@ -972,6 +1110,26 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
+  },
+  markerWarningPill: {
+    marginTop: 5,
+    backgroundColor: '#3A1717',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 139, 139, 0.42)',
+    maxWidth: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  markerWarningText: {
+    color: '#FFB4B4',
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.4,
   },
   markerLabelPill: {
     marginTop: 6,
@@ -1248,6 +1406,89 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  truthWarningBanner: {
+    minHeight: 58,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 139, 139, 0.52)',
+    backgroundColor: 'rgba(201, 31, 50, 0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  truthWarningCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  truthWarningTitle: {
+    color: '#FFE4E4',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  truthWarningText: {
+    color: '#F6CACA',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  truthfulnessPanel: {
+    minHeight: 58,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#1F1F1F',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  truthfulnessScoreBadge: {
+    minWidth: 44,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2E2E2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  truthfulnessScoreBadgeNegative: {
+    backgroundColor: '#3A1717',
+    borderColor: 'rgba(255, 139, 139, 0.38)',
+  },
+  truthfulnessScoreBadgePositive: {
+    backgroundColor: '#DFF7E9',
+    borderColor: 'rgba(99, 220, 144, 0.42)',
+  },
+  truthfulnessScoreText: {
+    color: '#EDEDED',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  truthfulnessScoreTextNegative: {
+    color: '#FFB4B4',
+  },
+  truthfulnessScoreTextPositive: {
+    color: '#167A3E',
+  },
+  truthfulnessCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  truthfulnessLabel: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  truthfulnessText: {
+    color: '#A9A9A9',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   voteActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1274,6 +1515,9 @@ const styles = StyleSheet.create({
   voteButtonPressed: {
     opacity: 0.76,
     transform: [{ scale: 0.99 }],
+  },
+  voteButtonDisabled: {
+    opacity: 0.62,
   },
   voteButtonText: {
     color: '#F7F7F7',
