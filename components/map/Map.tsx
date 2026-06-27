@@ -13,6 +13,7 @@ import {
     UserLocation,
     type CameraRef,
     type GeolocationPosition,
+    type ViewStateChangeEvent,
     useCurrentPosition,
 } from '@maplibre/maplibre-react-native';
 import * as ExpoLocation from 'expo-location';
@@ -34,7 +35,7 @@ import {
     XIcon,
     type LucideIcon,
 } from 'lucide-react-native';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Animated,
@@ -45,6 +46,7 @@ import {
     Pressable,
     StyleSheet,
     Text,
+    type NativeSyntheticEvent,
     useWindowDimensions,
     View,
 } from 'react-native';
@@ -61,6 +63,10 @@ import {
 
 const OVERVIEW_COORDINATE: GeoJSON.Position = SERVICE_AREA_CENTER;
 const OVERVIEW_ZOOM_LEVEL = MIN_NAVIGATION_ZOOM_LEVEL;
+const REPORT_MARKERS_MIN_ZOOM_LEVEL = MIN_NAVIGATION_ZOOM_LEVEL + 1;
+const REPORT_ZONE_FOCUS_ZOOM_LEVEL = REPORT_MARKERS_MIN_ZOOM_LEVEL + 0.5;
+const REPORT_ZONE_COLUMN_COUNT = 4;
+const REPORT_ZONE_ROW_COUNT = 3;
 const USER_ZOOM_LEVEL = 16;
 const USER_PITCH = 45;
 const INTRO_DELAY_MS = 250;
@@ -92,6 +98,12 @@ const STATUS_STYLES: Record<string, { label: string; color: string; Icon: Lucide
   active: { label: 'ACTIVO', color: '#F5C648', Icon: CircleAlertIcon },
   solved: { label: 'SOLUCIONADO', color: '#4EBB68', Icon: CheckIcon },
   false: { label: 'FALSO', color: '#C91F32', Icon: XIcon },
+};
+
+type ReportZoneCounter = {
+  id: string;
+  coordinate: [number, number];
+  count: number;
 };
 
 function toRadians(value: number): number {
@@ -174,6 +186,51 @@ function formatReportDate(isoDate: string): string {
   }).format(new Date(timestamp));
 }
 
+function clampIndex(value: number, maxIndex: number): number {
+  return Math.max(0, Math.min(maxIndex, value));
+}
+
+function getReportZoneCounters(zoneReports: ReportDocument[]): ReportZoneCounter[] {
+  const [west, south, east, north] = SERVICE_AREA_BOUNDS;
+  const lngSpan = east - west;
+  const latSpan = north - south;
+  const zones = new globalThis.Map<string, {
+    count: number;
+    lngTotal: number;
+    latTotal: number;
+  }>();
+
+  zoneReports.forEach((report) => {
+    const column = clampIndex(
+      Math.floor(((report.lng - west) / lngSpan) * REPORT_ZONE_COLUMN_COUNT),
+      REPORT_ZONE_COLUMN_COUNT - 1
+    );
+    const row = clampIndex(
+      Math.floor(((report.lat - south) / latSpan) * REPORT_ZONE_ROW_COUNT),
+      REPORT_ZONE_ROW_COUNT - 1
+    );
+    const zoneId = `${column}-${row}`;
+    const currentZone = zones.get(zoneId) ?? {
+      count: 0,
+      lngTotal: 0,
+      latTotal: 0,
+    };
+
+    currentZone.count += 1;
+    currentZone.lngTotal += report.lng;
+    currentZone.latTotal += report.lat;
+    zones.set(zoneId, currentZone);
+  });
+
+  return Array.from(zones.entries())
+    .map(([zoneId, zone]) => ({
+      id: `report-zone-${zoneId}`,
+      coordinate: [zone.lngTotal / zone.count, zone.latTotal / zone.count] as [number, number],
+      count: zone.count,
+    }))
+    .sort((firstZone, secondZone) => secondZone.count - firstZone.count);
+}
+
 export default function Map() {
   const cameraRef = useRef<CameraRef>(null);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
@@ -191,6 +248,7 @@ export default function Map() {
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(OVERVIEW_ZOOM_LEVEL);
   const currentPosition = useCurrentPosition();
   const params = useLocalSearchParams<{ focus?: string; reportId?: string; lat?: string; lng?: string }>();
   const router = useRouter();
@@ -347,6 +405,16 @@ export default function Map() {
     setIsCenteredOnUser(false);
   }, [setIsCenteredOnUser]);
 
+  const handleRegionDidChange = useCallback((event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+    const nextZoom = event.nativeEvent.zoom;
+
+    if (!Number.isFinite(nextZoom)) {
+      return;
+    }
+
+    setCurrentZoom(nextZoom);
+  }, []);
+
   const centerCameraOnUser = useCallback(async () => {
     let coordinate = latestUserCoordinateRef.current;
 
@@ -401,11 +469,13 @@ export default function Map() {
     };
   }, [centerCameraOnUser, registerCenterOnUser, setIsMapIntroActive]);
 
-  const visibleReports = reports.filter((report) =>
+  const visibleReports = useMemo(() => reports.filter((report) =>
     Number.isFinite(report.lat) &&
     Number.isFinite(report.lng) &&
     isCoordinatesInServiceArea({ lat: report.lat, lng: report.lng })
-  );
+  ), [reports]);
+  const shouldShowReportMarkers = currentZoom >= REPORT_MARKERS_MIN_ZOOM_LEVEL;
+  const reportZoneCounters = useMemo(() => getReportZoneCounters(visibleReports), [visibleReports]);
 
   const bottomSheetSnapPoints = ['80%'];
 
@@ -419,6 +489,18 @@ export default function Map() {
       bottomSheetRef.current?.present();
     });
   }, []);
+
+  const focusReportZone = useCallback((zoneCounter: ReportZoneCounter) => {
+    setFollowUserLocation(false);
+    setIsCenteredOnUser(false);
+
+    cameraRef.current?.flyTo({
+      center: zoneCounter.coordinate,
+      zoom: REPORT_ZONE_FOCUS_ZOOM_LEVEL,
+      pitch: USER_PITCH,
+      duration: RECENTER_FLY_DURATION_MS,
+    });
+  }, [setIsCenteredOnUser]);
 
   useEffect(() => {
     if (!params.focus) {
@@ -563,6 +645,7 @@ export default function Map() {
         compass={false}
         logo={false}
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
+        onRegionDidChange={handleRegionDidChange}
         onRegionWillChange={handleRegionWillChange}
         style={styles.map}
         tintColor="#1eaae1"
@@ -583,7 +666,7 @@ export default function Map() {
           heading
         />
 
-        {visibleReports.map((report) => {
+        {shouldShowReportMarkers ? visibleReports.map((report) => {
           const markerStyle = CATEGORY_MARKER_STYLES[report.category] ?? {
             label: report.category.toUpperCase(),
             color: '#00B7FF',
@@ -613,7 +696,36 @@ export default function Map() {
               </View>
             </Marker>
           );
-        })}
+        }) : reportZoneCounters.map((zoneCounter) => (
+          <Marker
+            key={zoneCounter.id}
+            id={zoneCounter.id}
+            lngLat={zoneCounter.coordinate}
+            anchor='center'
+            onPress={() => focusReportZone(zoneCounter)}
+          >
+            <View
+              accessibilityLabel={`${zoneCounter.count} ${zoneCounter.count === 1 ? 'reporte' : 'reportes'} en esta zona. Toca para acercar.`}
+              accessibilityRole='button'
+              accessible
+              collapsable={false}
+              style={styles.zoneCounterContainer}
+            >
+              <View style={styles.zoneCounterBubble}>
+                <CircleAlertIcon size={15} color='#06121E' strokeWidth={2.8} />
+                <Text numberOfLines={1} style={styles.zoneCounterCount}>
+                  {zoneCounter.count}
+                </Text>
+              </View>
+
+              <View style={styles.zoneCounterLabelPill}>
+                <Text numberOfLines={1} style={styles.zoneCounterLabelText}>
+                  {zoneCounter.count === 1 ? 'REPORTE' : 'REPORTES'}
+                </Text>
+              </View>
+            </View>
+          </Marker>
+        ))}
       </MapLibreMap>
 
       <BottomSheetModal
@@ -896,6 +1008,50 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#DCE8FF',
     letterSpacing: 0.4,
+  },
+  zoneCounterContainer: {
+    alignItems: 'center',
+    width: 86,
+    minHeight: 72,
+    justifyContent: 'center',
+  },
+  zoneCounterBubble: {
+    minWidth: 54,
+    height: 46,
+    borderRadius: 23,
+    paddingHorizontal: 12,
+    backgroundColor: '#F5C648',
+    borderWidth: 2,
+    borderColor: 'rgba(8, 26, 42, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  zoneCounterCount: {
+    color: '#06121E',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  zoneCounterLabelPill: {
+    marginTop: 5,
+    backgroundColor: '#151515',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 198, 72, 0.34)',
+  },
+  zoneCounterLabelText: {
+    color: '#F4E6A5',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   bottomSheetHandle: {
     width: 38,
