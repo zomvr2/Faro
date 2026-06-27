@@ -39,8 +39,8 @@ import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { ScrollView as GestureScrollView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const ICON_SIZE = 25;
-const TAB_BAR_HEIGHT = 64;
+const ICON_SIZE = 22;
+const TAB_BAR_HEIGHT = 62;
 const TAB_BAR_SIDE_OFFSET = 16;
 const TAB_BAR_MIN_BOTTOM = 20;
 const MAP_CENTER_BUTTON_SIZE = 54;
@@ -599,6 +599,13 @@ function TabsContent() {
           headerShown: false,
           tabBarLabelPosition: "beside-icon",
           tabBarShowLabel: false,
+          tabBarActiveTintColor: "#F4F4F4",
+          tabBarInactiveTintColor: "#8E8E8E",
+          tabBarItemStyle: {
+            height: TAB_BAR_HEIGHT,
+            justifyContent: "center",
+            alignItems: "center",
+          },
           tabBarStyle: isMapIntroActive
             ? { display: "none" }
             : {
@@ -607,11 +614,18 @@ function TabsContent() {
                 left: TAB_BAR_SIDE_OFFSET,
                 right: TAB_BAR_SIDE_OFFSET,
                 bottom: tabBarBottom,
-                borderRadius: 20,
+                borderRadius: 24,
                 height: TAB_BAR_HEIGHT,
-                marginHorizontal: 16,
-                elevation: 6,
-                backgroundColor: "rgb(0, 0, 0, 0.8)",
+                marginHorizontal: 12,
+                elevation: 10,
+                backgroundColor: "rgba(15, 15, 15, 0.94)",
+                borderTopWidth: 0,
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                shadowColor: "#000000",
+                shadowOpacity: 0.28,
+                shadowRadius: 16,
+                shadowOffset: { width: 0, height: 8 },
               },
         }}>
         <Tabs.Screen
@@ -636,24 +650,31 @@ function TabsContent() {
                 accessibilityLabel={accessibilityLabel}
                 testID={testID}
                 style={({ pressed }) => ({
-                  top: -18,
+                  top: -16,
                   justifyContent: "center",
                   alignItems: "center",
-                  opacity: pressed ? 0.9 : 1,
+                  opacity: pressed ? 0.86 : 1,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
                 })}
               >
                 <View
                   style={{
-                    width: 58,
-                    height: 58,
-                    borderRadius: 29,
-                    backgroundColor: "#00C8FF",
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: "#F4F4F4",
+                    borderWidth: 4,
+                    borderColor: "#0F0F0F",
                     justifyContent: "center",
                     alignItems: "center",
-                    elevation: 8,
+                    elevation: 12,
+                    shadowColor: "#000000",
+                    shadowOpacity: 0.35,
+                    shadowRadius: 14,
+                    shadowOffset: { width: 0, height: 8 },
                   }}
                 >
-                  <PlusIcon size={26} color="#00131A" />
+                  <PlusIcon size={25} color="#111111" strokeWidth={3} />
                 </View>
               </Pressable>
             ),
@@ -668,11 +689,13 @@ function TabsContent() {
             ),
             tabBarBadge: hasNearbyReports ? " " : undefined,
             tabBarBadgeStyle: {
-              minWidth: 10,
-              height: 10,
+              minWidth: 9,
+              height: 9,
               borderRadius: 999,
-              backgroundColor: "#FF4D4D",
-              top: -8,
+              backgroundColor: "#FF3B3B",
+              borderWidth: 1.5,
+              borderColor: "#0F0F0F",
+              top: 5,
               aspectRatio: 1
             },
             animation: "fade",
@@ -691,17 +714,26 @@ function TabsContent() {
             bottom: tabBarBottom + TAB_BAR_HEIGHT + MAP_CENTER_BUTTON_GAP,
             width: MAP_CENTER_BUTTON_SIZE,
             height: MAP_CENTER_BUTTON_SIZE,
-            borderRadius: MAP_CENTER_BUTTON_SIZE / 3,
+            borderRadius: 22,
             justifyContent: "center",
             alignItems: "center",
-            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backgroundColor: isCenteredOnUser ? "#F4F4F4" : "rgba(15, 15, 15, 0.94)",
             borderWidth: 1,
-            borderColor: "rgba(167, 184, 207, 0.4)",
-            elevation: 9,
+            borderColor: isCenteredOnUser ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.1)",
+            elevation: 10,
+            shadowColor: "#000000",
+            shadowOpacity: 0.28,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 8 },
             opacity: pressed ? 0.85 : 1,
+            transform: [{ scale: pressed ? 0.96 : 1 }],
           })}
         >
-          <LocateFixedIcon size={24} color={isCenteredOnUser ? "#25C7FF" : "#7E95B2"} />
+          <LocateFixedIcon
+            size={23}
+            color={isCenteredOnUser ? "#111111" : "#D8D8D8"}
+            strokeWidth={isCenteredOnUser ? 2.8 : 2.4}
+          />
         </Pressable>
       ) : null}
 
