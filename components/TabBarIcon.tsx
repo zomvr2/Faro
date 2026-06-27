@@ -1,9 +1,9 @@
 import { LucideIcon } from "lucide-react-native";
-import { View } from "react-native";
+import { type ColorValue, View } from "react-native";
 
 interface TabBarIconProps {
   Icon: LucideIcon;
-  color: string;
+  color: ColorValue;
   focused: boolean;
   size?: number;
 }
@@ -29,7 +29,7 @@ export function TabBarIcon({
         alignItems: "center",
       }}
     >
-      <Icon size={size} color={focused ? "#00C8FF" : color} />
+      <Icon size={size} color={focused ? "#00C8FF" : String(color)} />
     </View>
   );
 }

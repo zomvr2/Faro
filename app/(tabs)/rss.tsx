@@ -1,5 +1,4 @@
 import { getReportImageUrls, listLatestReports, subscribeToReports, type ReportDocument } from "@/services/appwrite";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
@@ -40,6 +39,8 @@ const STATUS_META: Record<string, { label: string; color: string; Icon: LucideIc
   false: { label: "Falso", color: "#F56A6A", Icon: XIcon },
 };
 
+const TAB_BAR_HEIGHT = 68;
+
 function formatRelativeDate(dateValue: string): string {
   const timestamp = Date.parse(dateValue);
 
@@ -73,7 +74,6 @@ function formatRelativeDate(dateValue: string): string {
 
 export default function RssScreen() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,9 +104,12 @@ export default function RssScreen() {
   }, []);
 
   useEffect(() => {
-    void refreshReports();
+    const refreshTimer = setTimeout(() => {
+      void refreshReports();
+    }, 0);
 
     let unsubscribe: (() => void) | null = null;
+    let errorTimer: ReturnType<typeof setTimeout> | null = null;
 
     try {
       unsubscribe = subscribeToReports(() => {
@@ -114,10 +117,16 @@ export default function RssScreen() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo iniciar la conexion en tiempo real.";
-      setError(message);
+      errorTimer = setTimeout(() => {
+        setError(message);
+      }, 0);
     }
 
     return () => {
+      clearTimeout(refreshTimer);
+      if (errorTimer) {
+        clearTimeout(errorTimer);
+      }
       unsubscribe?.();
     };
   }, [refreshReports]);
@@ -180,7 +189,7 @@ export default function RssScreen() {
         style={{ flex: 1 }}
         data={reports}
         keyExtractor={(item) => item.$id}
-        contentContainerStyle={{ gap: 10, paddingBottom: tabBarHeight + insets.bottom + 32 }}
+        contentContainerStyle={{ gap: 10, paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 32 }}
         ListEmptyComponent={
           <View
             style={{

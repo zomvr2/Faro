@@ -8,12 +8,12 @@ import {
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import {
     Camera,
-    MapView,
-    MarkerView,
+    Map as MapLibreMap,
+    Marker,
     UserLocation,
-    UserTrackingMode,
     type CameraRef,
-    type Location as MapLocation,
+    type GeolocationPosition,
+    useCurrentPosition,
 } from '@maplibre/maplibre-react-native';
 import * as ExpoLocation from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -157,7 +157,7 @@ export default function Map() {
   const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const latestUserCoordinateRef = useRef<GeoJSON.Position | null>(null);
   const { width: galleryWidth, height: galleryHeight } = useWindowDimensions();
-  const introLogoOpacity = useRef(new Animated.Value(0)).current;
+  const [introLogoOpacity] = useState(() => new Animated.Value(0));
   const [followUserLocation, setFollowUserLocation] = useState(false);
   const [introStarted, setIntroStarted] = useState(false);
   const [showIntroLogo, setShowIntroLogo] = useState(false);
@@ -166,6 +166,7 @@ export default function Map() {
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
+  const currentPosition = useCurrentPosition();
   const params = useLocalSearchParams<{ focus?: string; reportId?: string; lat?: string; lng?: string }>();
   const router = useRouter();
   const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
@@ -235,12 +236,11 @@ export default function Map() {
 
   const startCameraIntro = useCallback((coordinate: GeoJSON.Position) => {
     queueIntroTimer(() => {
-      cameraRef.current?.setCamera({
-        centerCoordinate: coordinate,
-        zoomLevel: USER_ZOOM_LEVEL,
+      cameraRef.current?.flyTo({
+        center: coordinate as [number, number],
+        zoom: USER_ZOOM_LEVEL,
         pitch: USER_PITCH,
-        animationMode: 'flyTo',
-        animationDuration: INTRO_FLY_DURATION_MS,
+        duration: INTRO_FLY_DURATION_MS,
       });
 
       queueIntroTimer(() => {
@@ -251,7 +251,7 @@ export default function Map() {
     }, INTRO_DELAY_MS);
   }, [queueIntroTimer, setIsCenteredOnUser, setIsMapIntroActive]);
 
-  const handleUserLocationUpdate = useCallback((location: MapLocation) => {
+  const handleUserLocationUpdate = useCallback((location: GeolocationPosition) => {
     const liveUserCoordinate: GeoJSON.Position = [location.coords.longitude, location.coords.latitude];
 
     latestUserCoordinateRef.current = liveUserCoordinate;
@@ -290,9 +290,23 @@ export default function Map() {
     });
   }, [introLogoOpacity, introStarted, setIsMapIntroActive, startCameraIntro]);
 
-  const handleRegionWillChange = useCallback((event: any) => {
+  useEffect(() => {
+    if (!currentPosition) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      handleUserLocationUpdate(currentPosition);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [currentPosition, handleUserLocationUpdate]);
+
+  const handleRegionWillChange = useCallback((event: { nativeEvent?: { userInteraction?: boolean } }) => {
     // Only disable follow mode for direct user map interactions.
-    const isUserInteraction = event?.properties?.isUserInteraction === true;
+    const isUserInteraction = event.nativeEvent?.userInteraction === true;
 
     if (!isUserInteraction) {
       return;
@@ -323,12 +337,11 @@ export default function Map() {
     setFollowUserLocation(false);
 
     requestAnimationFrame(() => {
-      cameraRef.current?.setCamera({
-        centerCoordinate: coordinate,
-        zoomLevel: USER_ZOOM_LEVEL,
+      cameraRef.current?.flyTo({
+        center: coordinate as [number, number],
+        zoom: USER_ZOOM_LEVEL,
         pitch: USER_PITCH,
-        animationMode: 'flyTo',
-        animationDuration: RECENTER_FLY_DURATION_MS,
+        duration: RECENTER_FLY_DURATION_MS,
       });
 
       queueIntroTimer(() => {
@@ -400,25 +413,30 @@ export default function Map() {
       return;
     }
 
-    lastHandledFocusRef.current = focusKey;
-    setFollowUserLocation(false);
-    setIsCenteredOnUser(false);
+    const frameId = requestAnimationFrame(() => {
+      lastHandledFocusRef.current = focusKey;
+      setFollowUserLocation(false);
+      setIsCenteredOnUser(false);
 
-    cameraRef.current?.setCamera({
-      centerCoordinate,
-      zoomLevel: USER_ZOOM_LEVEL,
-      pitch: USER_PITCH,
-      animationMode: 'flyTo',
-      animationDuration: RECENTER_FLY_DURATION_MS,
+      cameraRef.current?.flyTo({
+        center: centerCoordinate as [number, number],
+        zoom: USER_ZOOM_LEVEL,
+        pitch: USER_PITCH,
+        duration: RECENTER_FLY_DURATION_MS,
+      });
+
+      if (targetReport) {
+        queueIntroTimer(() => {
+          openReportModal(targetReport);
+        }, RECENTER_FLY_DURATION_MS + 60);
+      }
+
+      router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
     });
 
-    if (targetReport) {
-      queueIntroTimer(() => {
-        openReportModal(targetReport);
-      }, RECENTER_FLY_DURATION_MS + 60);
-    }
-
-    router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
   }, [openReportModal, params.focus, params.lat, params.lng, params.reportId, queueIntroTimer, reports, router, setIsCenteredOnUser]);
 
   const handleBottomSheetChange = useCallback((index: number) => {
@@ -490,10 +508,10 @@ export default function Map() {
 
   return (
     <View style={styles.container}>
-      <MapView
-        attributionEnabled={false}
-        compassEnabled={false}
-        logoEnabled={false}
+      <MapLibreMap
+        attribution={false}
+        compass={false}
+        logo={false}
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
         onRegionWillChange={handleRegionWillChange}
         style={styles.map}
@@ -501,23 +519,15 @@ export default function Map() {
       >
         <Camera
           ref={cameraRef}
-          defaultSettings={{
-            centerCoordinate: OVERVIEW_COORDINATE,
-            zoomLevel: OVERVIEW_ZOOM_LEVEL,
-            animationMode: 'flyTo',
-            animationDuration: 1200,
+          initialViewState={{
+            center: OVERVIEW_COORDINATE as [number, number],
+            zoom: OVERVIEW_ZOOM_LEVEL,
           }}
-          followUserLocation={followUserLocation}
-          followUserMode={UserTrackingMode.Follow}
-          followZoomLevel={USER_ZOOM_LEVEL}
-          followPitch={USER_PITCH}
+          trackUserLocation={followUserLocation ? 'default' : undefined}
         />
 
         <UserLocation
-          onUpdate={handleUserLocationUpdate}
-          showsUserHeadingIndicator
-          renderMode='native'
-          androidRenderMode='compass'
+          heading
         />
 
         {visibleReports.map((report) => {
@@ -528,12 +538,12 @@ export default function Map() {
           };
 
           return (
-            <MarkerView
+            <Marker
               key={report.$id}
-              coordinate={[report.lng, report.lat]}
-              anchor={{ x: 0.5, y: 1 }}
-              allowOverlap
-              onTouchEnd={() => openReportModal(report)}
+              id={report.$id}
+              lngLat={[report.lng, report.lat]}
+              anchor='bottom'
+              onPress={() => openReportModal(report)}
             >
               <View collapsable={false} style={styles.markerContainer}>
                 <View style={[styles.markerIconCircle, { backgroundColor: markerStyle.color }]}> 
@@ -548,10 +558,10 @@ export default function Map() {
 
                 <View style={styles.markerTip} />
               </View>
-            </MarkerView>
+            </Marker>
           );
         })}
-      </MapView>
+      </MapLibreMap>
 
       <BottomSheetModal
         ref={bottomSheetRef}
@@ -719,7 +729,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   introOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(5, 10, 18, 0.32)',
