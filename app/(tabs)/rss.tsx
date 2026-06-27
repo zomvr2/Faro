@@ -1,3 +1,4 @@
+import { isCoordinatesInServiceArea } from "@/components/map/serviceArea";
 import { getReportImageUrls, listLatestReports, subscribeToReports, type ReportDocument } from "@/services/appwrite";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -81,7 +82,7 @@ export default function RssScreen() {
   const refreshReports = useCallback(async () => {
     try {
       const documents = await listLatestReports();
-      setReports(documents);
+      setReports(documents.filter((report) => isCoordinatesInServiceArea(report)));
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar los reportes.";

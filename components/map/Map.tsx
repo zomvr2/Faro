@@ -49,9 +49,18 @@ import {
     View,
 } from 'react-native';
 import { useMapCameraControls } from './MapCameraContext';
+import {
+    MAX_NAVIGATION_ZOOM_LEVEL,
+    MIN_NAVIGATION_ZOOM_LEVEL,
+    SERVICE_AREA_BOUNDS,
+    SERVICE_AREA_CENTER,
+    SERVICE_AREA_NAME,
+    isCoordinatesInServiceArea,
+    isLngLatInServiceArea,
+} from './serviceArea';
 
-const OVERVIEW_COORDINATE: GeoJSON.Position = [-71.29, -29.95];
-const OVERVIEW_ZOOM_LEVEL = 10;
+const OVERVIEW_COORDINATE: GeoJSON.Position = SERVICE_AREA_CENTER;
+const OVERVIEW_ZOOM_LEVEL = MIN_NAVIGATION_ZOOM_LEVEL;
 const USER_ZOOM_LEVEL = 16;
 const USER_PITCH = 45;
 const INTRO_DELAY_MS = 250;
@@ -277,6 +286,12 @@ export default function Map() {
       return;
     }
 
+    if (!isLngLatInServiceArea(liveUserCoordinate)) {
+      setIntroStarted(true);
+      setIsMapIntroActive(false);
+      return;
+    }
+
     setIntroStarted(true);
     setIsMapIntroActive(true);
     setShowIntroLogo(true);
@@ -349,6 +364,16 @@ export default function Map() {
       }
     }
 
+    if (!isLngLatInServiceArea(coordinate)) {
+      setFollowUserLocation(false);
+      setIsCenteredOnUser(false);
+      Alert.alert(
+        'Fuera del area de cobertura',
+        `Faro solo permite navegar por ${SERVICE_AREA_NAME}.`
+      );
+      return;
+    }
+
     // Force a manual camera move first, then re-enable follow mode.
     setFollowUserLocation(false);
 
@@ -377,7 +402,9 @@ export default function Map() {
   }, [centerCameraOnUser, registerCenterOnUser, setIsMapIntroActive]);
 
   const visibleReports = reports.filter((report) =>
-    Number.isFinite(report.lat) && Number.isFinite(report.lng)
+    Number.isFinite(report.lat) &&
+    Number.isFinite(report.lng) &&
+    isCoordinatesInServiceArea({ lat: report.lat, lng: report.lng })
   );
 
   const bottomSheetSnapPoints = ['80%'];
@@ -423,7 +450,7 @@ export default function Map() {
         ? [targetLng, targetLat]
         : null;
 
-    if (!centerCoordinate) {
+    if (!centerCoordinate || !isLngLatInServiceArea(centerCoordinate)) {
       lastHandledFocusRef.current = focusKey;
       router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
       return;
@@ -546,6 +573,9 @@ export default function Map() {
             center: OVERVIEW_COORDINATE as [number, number],
             zoom: OVERVIEW_ZOOM_LEVEL,
           }}
+          maxBounds={SERVICE_AREA_BOUNDS}
+          maxZoom={MAX_NAVIGATION_ZOOM_LEVEL}
+          minZoom={MIN_NAVIGATION_ZOOM_LEVEL}
           trackUserLocation={followUserLocation ? 'default' : undefined}
         />
 

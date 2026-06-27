@@ -1,5 +1,6 @@
 import { TabBarIcon } from "@/components/TabBarIcon";
 import { MapCameraProvider, useMapCameraControls } from "@/components/map/MapCameraContext";
+import { SERVICE_AREA_NAME, isCoordinatesInServiceArea } from "@/components/map/serviceArea";
 import {
   createReportDocument,
   getReportMediaPreviewUrl,
@@ -250,7 +251,7 @@ function TabsContent() {
       try {
         const latestReports = await listLatestReports(100);
         if (isMounted) {
-          setReports(latestReports);
+          setReports(latestReports.filter((report) => isCoordinatesInServiceArea(report)));
         }
       } catch {
         // Ignore badge refresh errors so tab navigation remains unaffected.
@@ -273,7 +274,7 @@ function TabsContent() {
 
         const report = event.payload;
 
-        if (!report) {
+        if (!report || !isCoordinatesInServiceArea(report)) {
           return;
         }
 
@@ -538,12 +539,22 @@ function TabsContent() {
         accuracy: ExpoLocation.Accuracy.Balanced,
       });
 
+      const reportCoordinates = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+
+      if (!isCoordinatesInServiceArea(reportCoordinates)) {
+        setSubmitError(`Solo puedes publicar reportes dentro de ${SERVICE_AREA_NAME}.`);
+        return;
+      }
+
       const createdReport = await createReportDocument({
         title: trimmedTitle,
         category: selectedCategory,
         description: trimmedDescription,
-        lng: location.coords.longitude,
-        lat: location.coords.latitude,
+        lng: reportCoordinates.lng,
+        lat: reportCoordinates.lat,
         status: "active",
         images:
           selectedMedia.length > 0
