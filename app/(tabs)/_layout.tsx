@@ -45,8 +45,8 @@ const TAB_BAR_SIDE_OFFSET = 16;
 const TAB_BAR_MIN_BOTTOM = 20;
 const MAP_CENTER_BUTTON_SIZE = 54;
 const MAP_CENTER_BUTTON_GAP = 12;
-const CATEGORY_CARD_WIDTH = 160;
-const CATEGORY_CARD_GAP = 12;
+const CATEGORY_CARD_WIDTH = 138;
+const CATEGORY_CARD_GAP = 10;
 const CATEGORY_SNAP_INTERVAL = CATEGORY_CARD_WIDTH + CATEGORY_CARD_GAP;
 const MAX_REPORT_IMAGES = 3;
 const NEARBY_REPORT_RADIUS_METERS = 500;
@@ -96,7 +96,7 @@ function TabsContent() {
   const segments = useSegments();
   const insets = useSafeAreaInsets();
   const addSheetRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ["100%"], []);
+  const snapPoints = useMemo(() => ["90%"], []);
   const [selectedCategory, setSelectedCategory] = useState<ReportCategory>("infrastructure");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -709,26 +709,51 @@ function TabsContent() {
         ref={addSheetRef}
         snapPoints={snapPoints}
         index={0}
+        enableDynamicSizing={false}
         enablePanDownToClose
         enableContentPanningGesture={false}
-        backgroundStyle={{ backgroundColor: "rgba(0, 0, 0, 0.94)" }}
-        handleIndicatorStyle={{ backgroundColor: "rgba(167, 184, 207, 0.55)" }}
+        backgroundStyle={{
+          backgroundColor: "#141414",
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          borderWidth: 1,
+          borderColor: "rgba(255, 255, 255, 0.08)",
+        }}
+        handleIndicatorStyle={{
+          width: 38,
+          height: 4,
+          borderRadius: 999,
+          backgroundColor: "rgba(245, 248, 255, 0.34)",
+        }}
       >
         <BottomSheetScrollView
           nestedScrollEnabled
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator
           style={{
-            paddingHorizontal: 20,
+            paddingHorizontal: 16,
           }}
           contentContainerStyle={{
-            paddingBottom: Math.max(insets.bottom, 20),
-            gap: 15,
+            paddingBottom: Math.max(insets.bottom + 14, 28),
+            gap: 16,
           }}
         >
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View style={{ gap: 6, width: "70%" }}>
-              <Text style={{ color: "#E7F0FF", fontSize: 32, fontWeight: "800" }}>Nuevo Reporte</Text>
-              <Text style={{ color: "#91A8C2", fontSize: 15, fontWeight: "500" }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <View style={{ flex: 1, gap: 8 }}>
+              <View
+                style={{
+                  alignSelf: "flex-start",
+                  borderRadius: 999,
+                  backgroundColor: "#F4F4F4",
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                }}
+              >
+                <Text style={{ color: "#111111", fontSize: 11, fontWeight: "900" }}>Nuevo reporte</Text>
+              </View>
+              <Text style={{ color: "#FFFFFF", fontSize: 30, fontWeight: "900", lineHeight: 34 }}>
+                Publicar incidente
+              </Text>
+              <Text style={{ color: "#A5A5A5", fontSize: 14, fontWeight: "600", lineHeight: 20 }}>
                 Cuentanos que pasa para ayudar a la comunidad.
               </Text>
             </View>
@@ -736,25 +761,27 @@ function TabsContent() {
               onPress={closeAddSheet}
               hitSlop={10}
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                backgroundColor: "rgba(255, 255, 255, 0.08)",
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: "#242424",
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
                 justifyContent: "center",
                 alignItems: "center",
               }}
             >
-              <XIcon color="#A7B8CF" size={20} />
+              <XIcon color="#EDEDED" size={20} />
             </Pressable>
           </View>
 
           <View style={{ gap: 12 }}>
             <Text
               style={{
-                color: "#25C7FF",
+                color: "#9E9E9E",
                 fontSize: 12,
-                letterSpacing: 1.6,
-                fontWeight: "700",
+                letterSpacing: 0.8,
+                fontWeight: "900",
                 textTransform: "uppercase",
               }}
             >
@@ -765,18 +792,19 @@ function TabsContent() {
               value={title}
               onChangeText={setTitle}
               placeholder="Ej: Semaforo apagado en Av. Balmaceda"
-              placeholderTextColor="#7E95B2"
+              placeholderTextColor="#707070"
               maxLength={120}
               style={{
-                minHeight: 54,
-                borderRadius: 16,
-                borderWidth: 1.5,
-                borderColor: "rgba(125, 160, 195, 0.5)",
-                backgroundColor: "rgba(14, 34, 70, 0.4)",
-                color: "#D7E5FB",
+                minHeight: 50,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                backgroundColor: "#1F1F1F",
+                color: "#F4F4F4",
                 paddingHorizontal: 14,
-                paddingVertical: 12,
+                paddingVertical: 10,
                 fontSize: 15,
+                fontWeight: "700",
               }}
             />
           </View>
@@ -784,10 +812,10 @@ function TabsContent() {
           <View style={{ gap: 12 }}>
             <Text
               style={{
-                color: "#25C7FF",
+                color: "#9E9E9E",
                 fontSize: 12,
-                letterSpacing: 1.6,
-                fontWeight: "700",
+                letterSpacing: 0.8,
+                fontWeight: "900",
                 textTransform: "uppercase",
               }}
             >
@@ -812,32 +840,42 @@ function TabsContent() {
                     onPress={() => setSelectedCategory(value)}
                     style={{
                       width: CATEGORY_CARD_WIDTH,
-                      height: 84,
+                      height: 66,
                       borderRadius: 16,
-                      backgroundColor: isSelected ? "#15254A" : "rgba(255, 255, 255, 0.05)",
-                      borderWidth: 1.5,
-                      borderColor: isSelected ? "#00C8FF" : "rgba(167, 184, 207, 0.24)",
+                      backgroundColor: isSelected ? "#F4F4F4" : "#1F1F1F",
+                      borderWidth: 1,
+                      borderColor: isSelected ? "rgba(255, 255, 255, 0.75)" : "rgba(255, 255, 255, 0.1)",
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "flex-start",
-                      paddingHorizontal: 14,
-                      gap: 10,
+                      paddingHorizontal: 10,
+                      gap: 8,
                       marginRight: index === categories.length - 1 ? 0 : CATEGORY_CARD_GAP,
                     }}
                   >
                     <View
                       style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: isSelected ? "rgba(0, 200, 255, 0.2)" : "rgba(255, 255, 255, 0.08)",
+                        backgroundColor: isSelected ? "#111111" : "rgba(255, 255, 255, 0.08)",
                       }}
                     >
-                      <Icon color={isSelected ? "#00C8FF" : "#C8D8F2"} size={18} />
+                      <Icon color={isSelected ? "#F4F4F4" : "#D8D8D8"} size={17} />
                     </View>
-                    <Text style={{ color: "#C8D8F2", fontWeight: "600", fontSize: 13 }}>{label}</Text>
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        color: isSelected ? "#111111" : "#E2E2E2",
+                        fontWeight: "900",
+                        fontSize: 12,
+                        flex: 1,
+                      }}
+                    >
+                      {label}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -852,20 +890,20 @@ function TabsContent() {
                 paddingRight: 4,
               }}
             >
-              <Text style={{ color: "#7E95B2", fontSize: 12, fontWeight: "600" }}>
+              <Text style={{ color: "#8E8E8E", fontSize: 12, fontWeight: "700" }}>
                 Desliza para ver mas categorias
               </Text>
-              <ChevronsRightIcon color="#25C7FF" size={14} />
+              <ChevronsRightIcon color="#D8D8D8" size={14} />
             </View>
           </View>
 
           <View style={{ gap: 12 }}>
             <Text
               style={{
-                color: "#25C7FF",
+                color: "#9E9E9E",
                 fontSize: 12,
-                letterSpacing: 1.6,
-                fontWeight: "700",
+                letterSpacing: 0.8,
+                fontWeight: "900",
                 textTransform: "uppercase",
               }}
             >
@@ -876,19 +914,21 @@ function TabsContent() {
               value={description}
               onChangeText={setDescription}
               placeholder="Describe brevemente el incidente..."
-              placeholderTextColor="#7E95B2"
+              placeholderTextColor="#707070"
               multiline
               textAlignVertical="top"
               style={{
-                minHeight: 120,
-                borderRadius: 16,
-                borderWidth: 1.5,
-                borderColor: "rgba(125, 160, 195, 0.5)",
-                backgroundColor: "rgba(14, 34, 70, 0.4)",
-                color: "#D7E5FB",
+                minHeight: 112,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                backgroundColor: "#1F1F1F",
+                color: "#F4F4F4",
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 fontSize: 15,
+                fontWeight: "600",
+                lineHeight: 21,
               }}
             />
           </View>
@@ -896,10 +936,10 @@ function TabsContent() {
           <View style={{ gap: 12 }}>
             <Text
               style={{
-                color: "#25C7FF",
+                color: "#9E9E9E",
                 fontSize: 12,
-                letterSpacing: 1.6,
-                fontWeight: "700",
+                letterSpacing: 0.8,
+                fontWeight: "900",
                 textTransform: "uppercase",
               }}
             >
@@ -908,32 +948,31 @@ function TabsContent() {
 
             <View
               style={{
-                borderWidth: 1.5,
-                borderStyle: "dashed",
-                borderColor: "rgba(125, 160, 195, 0.5)",
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
                 borderRadius: 18,
-                paddingVertical: 20,
+                paddingVertical: 16,
                 justifyContent: "center",
                 alignItems: "center",
-                gap: 12,
-                backgroundColor: "rgba(14, 34, 70, 0.4)",
+                gap: 10,
+                backgroundColor: "#1F1F1F",
                 paddingHorizontal: 12,
               }}
             >
               <View
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 26,
+                  width: 46,
+                  height: 46,
+                  borderRadius: 23,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(37, 199, 255, 0.16)",
+                  backgroundColor: "#2B2B2B",
                 }}
               >
-                <UploadIcon color="#25C7FF" size={22} />
+                <UploadIcon color="#F4F4F4" size={20} />
               </View>
-              <Text style={{ color: "#D7E5FB", fontSize: 17, fontWeight: "700" }}>Tomar foto o subir</Text>
-              <Text style={{ color: "#7E95B2", fontSize: 14 }}>
+              <Text style={{ color: "#F4F4F4", fontSize: 17, fontWeight: "900" }}>Tomar foto o subir</Text>
+              <Text style={{ color: "#9A9A9A", fontSize: 13, fontWeight: "700" }}>
                 {selectedMedia.length}/{MAX_REPORT_IMAGES} imagenes seleccionadas
               </Text>
 
@@ -945,20 +984,20 @@ function TabsContent() {
                   disabled={isSubmitting}
                   style={{
                     flex: 1,
-                    height: 44,
-                    borderRadius: 12,
+                    height: 42,
+                    borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: "rgba(167, 184, 207, 0.35)",
+                    borderColor: "rgba(255, 255, 255, 0.12)",
                     alignItems: "center",
                     justifyContent: "center",
                     flexDirection: "row",
                     gap: 8,
-                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                    backgroundColor: "#2A2A2A",
                     opacity: isSubmitting ? 0.7 : 1,
                   }}
                 >
-                  <CameraIcon size={16} color="#D7E5FB" />
-                  <Text style={{ color: "#D7E5FB", fontWeight: "700" }}>Camara</Text>
+                  <CameraIcon size={16} color="#F2F2F2" />
+                  <Text style={{ color: "#F2F2F2", fontWeight: "900" }}>Camara</Text>
                 </Pressable>
 
                 <Pressable
@@ -968,20 +1007,20 @@ function TabsContent() {
                   disabled={isSubmitting}
                   style={{
                     flex: 1,
-                    height: 44,
-                    borderRadius: 12,
+                    height: 42,
+                    borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: "rgba(167, 184, 207, 0.35)",
+                    borderColor: "rgba(255, 255, 255, 0.12)",
                     alignItems: "center",
                     justifyContent: "center",
                     flexDirection: "row",
                     gap: 8,
-                    backgroundColor: "rgba(255, 255, 255, 0.05)",
+                    backgroundColor: "#2A2A2A",
                     opacity: isSubmitting ? 0.7 : 1,
                   }}
                 >
-                  <ImageIcon size={16} color="#D7E5FB" />
-                  <Text style={{ color: "#D7E5FB", fontWeight: "700" }}>Galeria</Text>
+                  <ImageIcon size={16} color="#F2F2F2" />
+                  <Text style={{ color: "#F2F2F2", fontWeight: "900" }}>Galeria</Text>
                 </Pressable>
               </View>
 
@@ -993,10 +1032,10 @@ function TabsContent() {
                   style={{ width: "100%" }}
                 >
                   {selectedMedia.map((media, index) => (
-                    <View key={`${media.uri}-${index}`} style={{ width: 96, height: 96 }}>
+                    <View key={`${media.uri}-${index}`} style={{ width: 88, height: 88 }}>
                       <Image
                         source={{ uri: media.uri }}
-                        style={{ width: 96, height: 96, borderRadius: 12 }}
+                        style={{ width: 88, height: 88, borderRadius: 14, backgroundColor: "#2A2A2A" }}
                         contentFit="cover"
                       />
 
@@ -1022,11 +1061,11 @@ function TabsContent() {
                               style={{
                                 width: `${Math.min(100, Math.max(0, uploadProgressByUri[media.uri] ?? 0))}%`,
                                 height: "100%",
-                                backgroundColor: "#25C7FF",
+                                backgroundColor: "#F4F4F4",
                               }}
                             />
                           </View>
-                          <Text style={{ color: "#E7F0FF", fontSize: 11, fontWeight: "700", textAlign: "right" }}>
+                          <Text style={{ color: "#F4F4F4", fontSize: 11, fontWeight: "900", textAlign: "right" }}>
                             {Math.round(uploadProgressByUri[media.uri] ?? 0)}%
                           </Text>
                         </View>
@@ -1043,7 +1082,9 @@ function TabsContent() {
                           width: 24,
                           height: 24,
                           borderRadius: 12,
-                          backgroundColor: "rgba(0, 0, 0, 0.7)",
+                          backgroundColor: "rgba(0, 0, 0, 0.74)",
+                          borderWidth: 1,
+                          borderColor: "rgba(255, 255, 255, 0.18)",
                           alignItems: "center",
                           justifyContent: "center",
                           opacity: isSubmitting ? 0.45 : 1,
@@ -1057,7 +1098,7 @@ function TabsContent() {
               ) : null}
 
               {isSubmitting && selectedMedia.length > 0 ? (
-                <Text style={{ color: "#9BC7FF", fontSize: 12, fontWeight: "700" }}>
+                <Text style={{ color: "#D8D8D8", fontSize: 12, fontWeight: "900" }}>
                   Subiendo imagenes: {totalUploadProgress}%
                 </Text>
               ) : null}
@@ -1070,24 +1111,24 @@ function TabsContent() {
             }}
             disabled={isSubmitting}
             style={{
-              height: 56,
-              borderRadius: 16,
-              backgroundColor: isSubmitting ? "#61AFC1" : "#00C8FF",
+              height: 52,
+              borderRadius: 999,
+              backgroundColor: isSubmitting ? "#AFAFAF" : "#F4F4F4",
               justifyContent: "center",
               alignItems: "center",
               flexDirection: "row",
-              gap: 10,
-              marginTop: 12,
+              gap: 9,
+              marginTop: 6,
               opacity: isSubmitting ? 0.85 : 1,
             }}
           >
-            <UploadIcon color="#00131A" size={18} />
-            <Text style={{ color: "#00131A", fontWeight: "800", fontSize: 18 }}>
+            <UploadIcon color="#111111" size={18} />
+            <Text style={{ color: "#111111", fontWeight: "900", fontSize: 16 }}>
               {isSubmitting ? "Publicando..." : "Publicar Reporte"}
             </Text>
           </Pressable>
 
-          {submitError ? <Text style={{ color: "#FF8C8C", fontSize: 13, fontWeight: "600" }}>{submitError}</Text> : null}
+          {submitError ? <Text style={{ color: "#FF8C8C", fontSize: 13, fontWeight: "800" }}>{submitError}</Text> : null}
         </BottomSheetScrollView>
       </BottomSheetModal>
 
