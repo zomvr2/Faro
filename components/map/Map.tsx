@@ -114,6 +114,22 @@ function formatDistance(distanceMeters: number): string {
   return `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
+function formatCoordinatePair(lat: number, lng: number): string {
+  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+}
+
+function getStatusDetail(status: string): string {
+  if (status === 'solved') {
+    return 'Incidente solucionado';
+  }
+
+  if (status === 'false') {
+    return 'Marcado como falso';
+  }
+
+  return 'Reporte en revision';
+}
+
 function formatReportDate(isoDate: string): string {
   const timestamp = Date.parse(isoDate);
 
@@ -364,7 +380,7 @@ export default function Map() {
     Number.isFinite(report.lat) && Number.isFinite(report.lng)
   );
 
-  const bottomSheetSnapPoints = ['55%', '92%'];
+  const bottomSheetSnapPoints = ['80%'];
 
   const closeReportModal = useCallback(() => {
     bottomSheetRef.current?.dismiss();
@@ -493,6 +509,13 @@ export default function Map() {
     setIsGalleryVisible(false);
   }, []);
 
+  const handleVotePlaceholder = useCallback((vote: 'veridico' | 'falso') => {
+    Alert.alert(
+      'Votaciones',
+      `El voto ${vote} quedara disponible en la proxima implementacion.`
+    );
+  }, []);
+
   useEffect(() => {
     if (!isGalleryVisible || selectedReportImages.length === 0) {
       return;
@@ -565,9 +588,10 @@ export default function Map() {
 
       <BottomSheetModal
         ref={bottomSheetRef}
-        index={1}
+        index={0}
         snapPoints={bottomSheetSnapPoints}
         onChange={handleBottomSheetChange}
+        enableDynamicSizing={false}
         enablePanDownToClose
         backdropComponent={renderBottomSheetBackdrop}
         handleIndicatorStyle={styles.bottomSheetHandle}
@@ -576,75 +600,123 @@ export default function Map() {
         {selectedReport && selectedMarkerStyle ? (
           <BottomSheetScrollView
             contentContainerStyle={styles.bottomSheetContent}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator
           >
-            <View style={styles.detailsHeader}>
-              <View style={styles.headerTitleSection}>
-                <View style={[styles.categoryBadge, { backgroundColor: selectedMarkerStyle.color }]}>
-                  <selectedMarkerStyle.Icon size={12} color='#06121E' strokeWidth={2.8} />
-                  <Text style={styles.categoryBadgeText}>{selectedMarkerStyle.label}</Text>
+            <View style={styles.reportHero}>
+              {selectedReportImages.length > 0 ? (
+                <Pressable onPress={() => openGalleryAtIndex(0)} style={styles.reportHeroMedia}>
+                  <Image
+                    source={{ uri: selectedReportImages[0] }}
+                    style={styles.reportHeroImage}
+                    resizeMode='cover'
+                  />
+                </Pressable>
+              ) : (
+                <View style={styles.reportHeroFallback}>
+                  <selectedMarkerStyle.Icon size={40} color={selectedMarkerStyle.color} strokeWidth={2.2} />
+                  <Text style={styles.reportHeroFallbackText}>{selectedMarkerStyle.label}</Text>
                 </View>
-                <Text style={styles.reportTitle}>{selectedReport.title?.trim() || 'Sin título'}</Text>
-              </View>
-              <Pressable onPress={closeReportModal} style={styles.closeButton} hitSlop={10}>
-                <XIcon color='#A7B8CF' size={20} />
-              </Pressable>
-            </View>
+              )}
 
-            <View style={styles.reportMetadata}>
-              <View style={styles.metadataItem}>
-                <Calendar size={14} color='#8FA7BD' />
-                <Text style={styles.metadataText}>{formatReportDate(selectedReport.$createdAt)}</Text>
-              </View>
-              <Text style={styles.metadataSeparator}>·</Text>
-              {selectedStatusStyle ? (
-                <>
-                  <View style={styles.metadataItem}>
-                    <selectedStatusStyle.Icon size={14} color={selectedStatusStyle.color} />
-                    <Text style={[styles.metadataText, styles.statusMetadataText, { color: selectedStatusStyle.color }]}> 
-                      {selectedStatusStyle.label}
+              <Pressable onPress={closeReportModal} style={styles.closeButton} hitSlop={10}>
+                <XIcon color='#F3F7FF' size={20} />
+              </Pressable>
+
+              <View style={styles.heroBadgesRow}>
+                <View style={[styles.categoryBadge, { borderColor: `${selectedMarkerStyle.color}80` }]}>
+                  <selectedMarkerStyle.Icon size={12} color={selectedMarkerStyle.color} strokeWidth={2.8} />
+                  <Text style={[styles.categoryBadgeText, { color: selectedMarkerStyle.color }]}>
+                    {selectedMarkerStyle.label}
+                  </Text>
+                </View>
+
+                {selectedReportImages.length > 0 ? (
+                  <View style={styles.photoCountBadge}>
+                    <ImageIcon size={14} color='#D5E4FB' strokeWidth={2.2} />
+                    <Text style={styles.photoCountText}>
+                      {selectedReportImages.length} {selectedReportImages.length === 1 ? 'imagen' : 'imagenes'}
                     </Text>
                   </View>
-                  <Text style={styles.metadataSeparator}>·</Text>
-                </>
-              ) : null}
-              <View style={styles.metadataItem}>
-                <MapPin size={14} color='#8FA7BD' />
-                <Text style={styles.metadataText}>{selectedReportDistance}</Text>
+                ) : null}
               </View>
             </View>
 
-            {selectedReportImages.length > 0 ? (
-              <View style={styles.mainImageSection}>
-                <View style={styles.mainImageContainer}>
-                  <Pressable onPress={() => openGalleryAtIndex(0)}>
-                    <Image
-                      source={{ uri: selectedReportImages[0] }}
-                      style={styles.mainImage}
-                    />
-                  </Pressable>
-                  {selectedReportImages.length > 0 && (
-                    <View style={styles.photoCountBadge}>
-                      <ImageIcon size={14} color='#D5E4FB' strokeWidth={2.2} />
-                      <Text style={styles.photoCountText}>
-                        {selectedReportImages.length} {selectedReportImages.length === 1 ? 'imagen' : 'imagenes'}
-                      </Text>
-                    </View>
-                  )}
+            <View style={styles.reportSummaryBody}>
+              <View style={styles.reportMetadata}>
+                <View style={styles.metadataItem}>
+                  <MapPin size={14} color='#9AA7B8' />
+                  <Text numberOfLines={1} style={styles.metadataText}>
+                    {selectedReportDistance} · {formatCoordinatePair(selectedReport.lat, selectedReport.lng)}
+                  </Text>
                 </View>
               </View>
-            ) : null}
 
-            <View style={styles.descriptionSection}>
-              <Text style={styles.descriptionTitle}>Descripción del reporte</Text>
-              <View style={styles.descriptionContainer}>
+              <Text style={styles.reportTitle}>{selectedReport.title?.trim() || 'Sin titulo'}</Text>
+
+              <View style={styles.reportMetadata}>
+                <View style={styles.metadataItem}>
+                  <Calendar size={14} color='#8795A8' />
+                  <Text style={styles.metadataText}>Reportado {formatReportDate(selectedReport.$createdAt).toLowerCase()}</Text>
+                </View>
+              </View>
+
+              {selectedStatusStyle ? (
+                <View
+                  style={[
+                    styles.statusBanner,
+                    {
+                      backgroundColor: `${selectedStatusStyle.color}24`,
+                      borderColor: `${selectedStatusStyle.color}80`,
+                    },
+                  ]}
+                >
+                  <selectedStatusStyle.Icon size={18} color={selectedStatusStyle.color} strokeWidth={2.8} />
+                  <Text style={styles.statusBannerText} numberOfLines={1}>
+                    <Text style={{ color: '#F3F8FF', fontWeight: '900' }}>{selectedStatusStyle.label}</Text>
+                    {' · '}
+                    {getStatusDetail(selectedReport.status)}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.voteActions}>
+                <Pressable
+                  accessibilityRole='button'
+                  accessibilityLabel='Marcar reporte como veridico'
+                  onPress={() => handleVotePlaceholder('veridico')}
+                  style={({ pressed }) => [
+                    styles.voteButton,
+                    styles.truthVoteButton,
+                    pressed && styles.voteButtonPressed,
+                  ]}
+                >
+                  <CheckIcon size={16} color='#167A3E' strokeWidth={3} />
+                  <Text style={[styles.voteButtonText, styles.truthVoteButtonText]}>Veridico</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole='button'
+                  accessibilityLabel='Marcar reporte como falso'
+                  onPress={() => handleVotePlaceholder('falso')}
+                  style={({ pressed }) => [
+                    styles.voteButton,
+                    styles.falseVoteButton,
+                    pressed && styles.voteButtonPressed,
+                  ]}
+                >
+                  <XIcon size={16} color='#FF8B8B' strokeWidth={3} />
+                  <Text style={styles.voteButtonText}>Falso</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.descriptionSection}>
+                <Text style={styles.descriptionTitle}>Resumen</Text>
                 <Text style={styles.descriptionText}>
                   {selectedReport.description?.trim() || 'Sin descripcion'}
                 </Text>
               </View>
             </View>
 
-            <Text style={styles.reportIdFooter}>{selectedReport.$id}</Text>
           </BottomSheetScrollView>
         ) : null}
       </BottomSheetModal>
@@ -796,118 +868,131 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   bottomSheetHandle: {
-    width: 42,
-    height: 5,
+    width: 38,
+    height: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(190, 209, 235, 0.5)',
+    backgroundColor: 'rgba(245, 248, 255, 0.34)',
   },
   bottomSheetBackground: {
-    backgroundColor: '#081525',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: '#151515',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(151, 182, 222, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   bottomSheetContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 34,
+    gap: 0,
   },
-  detailsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
+  reportHero: {
+    height: 214,
+    marginHorizontal: -14,
+    marginTop: -2,
+    backgroundColor: '#202020',
+    overflow: 'hidden',
+    position: 'relative',
   },
-  headerTitleSection: {
+  reportHeroMedia: {
     flex: 1,
-    gap: 6,
+  },
+  reportHeroImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#202020',
+  },
+  reportHeroFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1D1D1D',
+    gap: 8,
+  },
+  reportHeroFallbackText: {
+    color: '#EDEDED',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  heroBadgesRow: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  reportSummaryBody: {
+    paddingTop: 14,
+    gap: 10,
   },
   categoryBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: 'rgba(18, 18, 18, 0.76)',
   },
   categoryBadgeText: {
-    color: '#06121E',
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 0.6,
   },
   reportTitle: {
-    color: '#E4EEFF',
-    fontSize: 24,
-    fontWeight: '800',
+    color: '#FFFFFF',
+    fontSize: 23,
+    fontWeight: '900',
     lineHeight: 28,
   },
   closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(17, 17, 17, 0.68)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   reportMetadata: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
-    gap: 8,
+    marginTop: 0,
+    gap: 6,
   },
   metadataItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
   },
   metadataText: {
-    color: '#8FA7BD',
+    color: '#9C9C9C',
     fontSize: 13,
-    fontWeight: '500',
-  },
-  statusMetadataText: {
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  metadataSeparator: {
-    color: '#566E86',
-    marginHorizontal: 6,
-    fontSize: 12,
-  },
-  mainImageSection: {
-    marginTop: 12,
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-  },
-  mainImageContainer: {
-    position: 'relative',
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  mainImage: {
-    width: '100%',
-    height: 240,
-    backgroundColor: '#1A2F50',
+    fontWeight: '600',
   },
   photoCountBadge: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    backgroundColor: 'rgba(8, 21, 37, 0.62)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(18, 18, 18, 0.76)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(200, 216, 242, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   photoCountText: {
-    color: '#D5E4FB',
+    color: '#EDEDED',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -961,36 +1046,72 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  statusBanner: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusBannerText: {
+    flex: 1,
+    color: '#E5E5E5',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  voteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  voteButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderWidth: 1,
+  },
+  truthVoteButton: {
+    backgroundColor: '#F4F4F4',
+    borderColor: 'rgba(255, 255, 255, 0.72)',
+  },
+  falseVoteButton: {
+    backgroundColor: '#2E2E2E',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  voteButtonPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.99 }],
+  },
+  voteButtonText: {
+    color: '#F7F7F7',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  truthVoteButtonText: {
+    color: '#111111',
+  },
   descriptionSection: {
-    marginTop: 10,
-    gap: 12,
+    marginTop: 12,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 10,
   },
   descriptionTitle: {
-    color: '#25C7FF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-  },
-  descriptionContainer: {
-    minHeight: 120,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(125, 160, 195, 0.5)',
-    backgroundColor: 'rgba(14, 34, 70, 0.4)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    color: '#FFFFFF',
+    fontSize: 23,
+    fontWeight: '900',
   },
   descriptionText: {
-    color: '#D7E5FB',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  reportIdFooter: {
-    color: '#576A82',
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 12,
-    textAlign: 'center',
+    color: '#CFCFCF',
+    fontSize: 16,
+    lineHeight: 23,
   },
 });

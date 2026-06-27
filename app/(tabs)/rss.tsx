@@ -19,7 +19,7 @@ import {
     type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CATEGORY_META: Record<string, { label: string; color: string; Icon: LucideIcon }> = {
@@ -133,74 +133,49 @@ export default function RssScreen() {
 
   if (isLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#050C18",
-          gap: 12,
-          paddingHorizontal: 20,
-        }}
-      >
-        <ActivityIndicator color="#25C7FF" size="large" />
-        <Text style={{ color: "#D7E5FB", fontSize: 15 }}>Cargando reportes...</Text>
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator color="#F5F5F5" size="large" />
+        <Text style={styles.loadingText}>Cargando reportes...</Text>
       </View>
     );
   }
 
   return (
     <View
-      style={{
-        flex: 1,
-        backgroundColor: "#050C18",
-        paddingHorizontal: 16,
-        paddingTop: insets.top + 24,
-      }}
+      style={[
+        styles.screen,
+        {
+          paddingTop: insets.top + 18,
+        },
+      ]}
     >
-      <Text style={{ color: "#E7F0FF", fontSize: 26, fontWeight: "800", marginBottom: 16 }}>
-        Reportes en tiempo real
-      </Text>
+      <View style={styles.header}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.eyebrow}>Faro Live</Text>
+          <Text style={styles.title}>Reportes en tiempo real</Text>
+        </View>
 
-      <View
-        style={{
-          marginBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          alignSelf: "flex-start",
-          gap: 8,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: "rgba(37, 199, 255, 0.35)",
-          backgroundColor: "rgba(20, 58, 88, 0.45)",
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-        }}
-      >
-        <RadioIcon size={14} color="#25C7FF" />
-        <Text style={{ color: "#BFE8FF", fontSize: 12, fontWeight: "700" }}>Actualizacion en vivo</Text>
+        <View style={styles.livePill}>
+          <RadioIcon size={13} color="#111111" />
+          <Text style={styles.livePillText}>Live</Text>
+        </View>
       </View>
 
       {error ? (
-        <Text style={{ color: "#FF8C8C", marginBottom: 16, fontSize: 14, fontWeight: "600" }}>{error}</Text>
+        <Text style={styles.errorText}>{error}</Text>
       ) : null}
 
       <FlatList
-        style={{ flex: 1 }}
+        style={styles.list}
         data={reports}
         keyExtractor={(item) => item.$id}
-        contentContainerStyle={{ gap: 10, paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 32 }}
+        contentContainerStyle={{
+          gap: 14,
+          paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 34,
+        }}
         ListEmptyComponent={
-          <View
-            style={{
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: "rgba(167, 184, 207, 0.3)",
-              backgroundColor: "rgba(14, 34, 70, 0.4)",
-              padding: 14,
-            }}
-          >
-            <Text style={{ color: "#D7E5FB", fontSize: 14 }}>No hay reportes todavia.</Text>
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No hay reportes todavia.</Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -223,120 +198,74 @@ export default function RssScreen() {
           return (
             <Pressable
               onPress={() => handleOpenReportOnMap(item)}
-              style={({ pressed }) => ({
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: "rgba(167, 184, 207, 0.24)",
-                backgroundColor: "rgba(14, 34, 70, 0.48)",
-                overflow: "hidden",
-                opacity: pressed ? 0.88 : 1,
-              })}
+              style={({ pressed }) => [
+                styles.reportCard,
+                pressed && styles.reportCardPressed,
+              ]}
             >
               {primaryImage ? (
-                <View style={{ position: "relative" }}>
+                <View style={styles.imageFrame}>
                   <Image
                     source={{ uri: primaryImage }}
-                    style={{ width: "100%", height: 140, backgroundColor: "#173055" }}
+                    style={styles.reportImage}
                     contentFit="cover"
                   />
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: 10,
-                      top: 10,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      borderRadius: 999,
-                      backgroundColor: "rgba(7, 18, 30, 0.72)",
-                      borderWidth: 1,
-                      borderColor: "rgba(187, 214, 240, 0.35)",
-                      paddingHorizontal: 8,
-                      paddingVertical: 5,
-                    }}
-                  >
-                    <ImageIcon size={12} color="#D7E5FB" />
-                    <Text style={{ color: "#D7E5FB", fontSize: 11, fontWeight: "700" }}>
-                      {imageUrls.length}
-                    </Text>
+
+                  <View style={styles.imageShade} />
+
+                  <View style={styles.topOverlayRow}>
+                    <View style={[styles.overlayPill, { borderColor: `${categoryMeta.color}70` }]}>
+                      <categoryMeta.Icon size={12} color={categoryMeta.color} />
+                      <Text style={[styles.overlayPillText, { color: categoryMeta.color }]}>{categoryMeta.label}</Text>
+                    </View>
+
+                    <View style={styles.imageCountPill}>
+                      <ImageIcon size={12} color="#F2F2F2" />
+                      <Text style={styles.imageCountText}>{imageUrls.length}</Text>
+                    </View>
                   </View>
+
                   {extraImages > 0 ? (
-                    <View
-                      style={{
-                        position: "absolute",
-                        right: 10,
-                        top: 10,
-                        borderRadius: 999,
-                        backgroundColor: "rgba(37, 199, 255, 0.9)",
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                      }}
-                    >
-                      <Text style={{ color: "#00131A", fontSize: 11, fontWeight: "800" }}>+{extraImages}</Text>
+                    <View style={styles.extraImagePill}>
+                      <Text style={styles.extraImageText}>+{extraImages}</Text>
                     </View>
                   ) : null}
                 </View>
-              ) : null}
+              ) : (
+                <View style={styles.noImageFrame}>
+                  <View style={[styles.noImageIcon, { backgroundColor: `${categoryMeta.color}22` }]}>
+                    <categoryMeta.Icon size={26} color={categoryMeta.color} />
+                  </View>
+                  <Text style={styles.noImageText}>{categoryMeta.label}</Text>
+                </View>
+              )}
 
-              <View style={{ padding: 12, gap: 10 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      borderRadius: 999,
-                      backgroundColor: "rgba(12, 26, 42, 0.7)",
-                      borderWidth: 1,
-                      borderColor: `${categoryMeta.color}80`,
-                      paddingHorizontal: 8,
-                      paddingVertical: 5,
-                    }}
-                  >
-                    <categoryMeta.Icon size={12} color={categoryMeta.color} />
-                    <Text style={{ color: categoryMeta.color, fontSize: 11, fontWeight: "800" }}>{categoryMeta.label}</Text>
+              <View style={styles.cardBody}>
+                <View style={styles.cardMetaRow}>
+                  <View style={[styles.statusPill, { borderColor: `${statusMeta.color}70` }]}>
+                    <statusMeta.Icon size={12} color={statusMeta.color} />
+                    <Text style={[styles.statusPillText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
                   </View>
 
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      borderRadius: 999,
-                      backgroundColor: "rgba(12, 26, 42, 0.7)",
-                      borderWidth: 1,
-                      borderColor: `${statusMeta.color}80`,
-                      paddingHorizontal: 8,
-                      paddingVertical: 5,
-                    }}
-                  >
-                    <statusMeta.Icon size={12} color={statusMeta.color} />
-                    <Text style={{ color: statusMeta.color, fontSize: 11, fontWeight: "800" }}>{statusMeta.label}</Text>
+                  <View style={styles.timeMeta}>
+                    <CalendarClockIcon size={13} color="#9B9B9B" />
+                    <Text style={styles.timeMetaText}>{formatRelativeDate(item.$createdAt)}</Text>
                   </View>
                 </View>
 
-                <Text style={{ color: "#EAF3FF", fontSize: 17, fontWeight: "800" }} numberOfLines={1}>
+                <Text style={styles.cardTitle} numberOfLines={2}>
                   {item.title || "Sin titulo"}
                 </Text>
 
-                <Text style={{ color: "#BCD1EA", fontSize: 14, lineHeight: 20 }} numberOfLines={2}>
+                <Text style={styles.cardDescription} numberOfLines={2}>
                   {item.description}
                 </Text>
 
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <CalendarClockIcon size={13} color="#8FB3D9" />
-                    <Text style={{ color: "#8FB3D9", fontSize: 12, fontWeight: "600" }}>
-                      {formatRelativeDate(item.$createdAt)}
-                    </Text>
-                  </View>
-
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <MapPinIcon size={13} color="#8FB3D9" />
-                    <Text style={{ color: "#8FB3D9", fontSize: 12, fontWeight: "600" }}>
-                      {item.lat.toFixed(3)}, {item.lng.toFixed(3)}
-                    </Text>
-                  </View>
+                <View style={styles.locationRow}>
+                  <MapPinIcon size={13} color="#8C8C8C" />
+                  <Text style={styles.locationText}>
+                    {item.lat.toFixed(3)}, {item.lng.toFixed(3)}
+                  </Text>
                 </View>
               </View>
             </Pressable>
@@ -346,3 +275,249 @@ export default function RssScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0A0A0B",
+    gap: 12,
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    color: "#EDEDED",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: "#0A0A0B",
+    paddingHorizontal: 14,
+  },
+  header: {
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  headerCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  eyebrow: {
+    color: "#8E8E8E",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  title: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "900",
+    lineHeight: 32,
+  },
+  livePill: {
+    minHeight: 32,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F4F4F4",
+  },
+  livePillText: {
+    color: "#111111",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  errorText: {
+    color: "#FF8C8C",
+    marginBottom: 14,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  list: {
+    flex: 1,
+  },
+  emptyCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "#171717",
+    padding: 16,
+  },
+  emptyText: {
+    color: "#D6D6D6",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reportCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "#171717",
+    overflow: "hidden",
+  },
+  reportCardPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }],
+  },
+  imageFrame: {
+    height: 190,
+    position: "relative",
+    backgroundColor: "#202020",
+  },
+  reportImage: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#202020",
+  },
+  imageShade: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.16)",
+  },
+  topOverlayRow: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    top: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  overlayPill: {
+    maxWidth: "72%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(14, 14, 15, 0.78)",
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  overlayPillText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  imageCountPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(14, 14, 15, 0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.16)",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  imageCountText: {
+    color: "#F2F2F2",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  extraImagePill: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    borderRadius: 999,
+    backgroundColor: "#F4F4F4",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  extraImageText: {
+    color: "#111111",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  noImageFrame: {
+    height: 118,
+    backgroundColor: "#202020",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  noImageIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noImageText: {
+    color: "#DADADA",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  cardBody: {
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    paddingBottom: 13,
+    gap: 8,
+  },
+  cardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: "#222222",
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  timeMeta: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 5,
+  },
+  timeMetaText: {
+    color: "#9B9B9B",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  cardTitle: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "900",
+    lineHeight: 23,
+  },
+  cardDescription: {
+    color: "#C7C7C7",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingTop: 2,
+  },
+  locationText: {
+    color: "#8C8C8C",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+});
