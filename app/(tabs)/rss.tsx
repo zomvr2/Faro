@@ -87,6 +87,16 @@ function getReportRating(report: Pick<ReportDocument, "rating">): number {
   return typeof rating === "number" && Number.isFinite(rating) ? rating : 0;
 }
 
+function getReportLocationLabel(report: Pick<ReportDocument, "locationLabel">): string {
+  const locationLabel = report.locationLabel?.trim();
+
+  if (locationLabel) {
+    return locationLabel;
+  }
+
+  return "Ubicacion aproximada";
+}
+
 function formatTruthfulnessScore(rating: number): string {
   return rating > 0 ? `+${rating}` : String(rating);
 }
@@ -315,8 +325,8 @@ export default function RssScreen() {
 
                 <View style={styles.locationRow}>
                   <MapPinIcon size={13} color="#8C8C8C" />
-                  <Text style={styles.locationText}>
-                    {item.lat.toFixed(3)}, {item.lng.toFixed(3)}
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {getReportLocationLabel(item)}
                   </Text>
                 </View>
               </View>

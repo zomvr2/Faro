@@ -10,6 +10,7 @@ import {
   subscribeToReports,
   uploadReportMedia,
 } from "@/services/appwrite";
+import { getApproximateLocationLabel } from "@/services/reverseGeocoding";
 import { BottomSheetModal, BottomSheetModalProvider, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -549,6 +550,8 @@ function TabsContent() {
         return;
       }
 
+      const locationLabel = await getApproximateLocationLabel(reportCoordinates);
+
       const createdReport = await createReportDocument({
         title: trimmedTitle,
         category: selectedCategory,
@@ -556,6 +559,7 @@ function TabsContent() {
         lng: reportCoordinates.lng,
         lat: reportCoordinates.lat,
         status: "active",
+        locationLabel,
         images:
           selectedMedia.length > 0
             ? (

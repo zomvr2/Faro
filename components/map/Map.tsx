@@ -138,8 +138,14 @@ function formatDistance(distanceMeters: number): string {
   return `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
-function formatCoordinatePair(lat: number, lng: number): string {
-  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+function getReportLocationLabel(report: Pick<ReportDocument, 'locationLabel'>): string {
+  const locationLabel = report.locationLabel?.trim();
+
+  if (locationLabel) {
+    return locationLabel;
+  }
+
+  return 'Ubicacion aproximada';
 }
 
 function getStatusDetail(status: string): string {
@@ -633,6 +639,7 @@ export default function Map() {
     ? formatDistance(haversineDistanceMeters(userCoordinate, [selectedReport.lng, selectedReport.lat]))
     : 'No disponible';
 
+  const selectedReportLocationLabel = selectedReport ? getReportLocationLabel(selectedReport) : 'Ubicacion no disponible';
   const selectedReportRating = selectedReport ? getReportRating(selectedReport) : 0;
   const selectedReportIsPossiblyFalse = selectedReport ? isReportPossiblyFalse(selectedReport) : false;
   const isSelectedReportVoting = selectedReport ? pendingVoteReportId === selectedReport.$id : false;
@@ -886,7 +893,7 @@ export default function Map() {
                 <View style={styles.metadataItem}>
                   <MapPin size={14} color='#9AA7B8' />
                   <Text numberOfLines={1} style={styles.metadataText}>
-                    {selectedReportDistance} · {formatCoordinatePair(selectedReport.lat, selectedReport.lng)}
+                    {selectedReportDistance} · {selectedReportLocationLabel}
                   </Text>
                 </View>
               </View>

@@ -41,6 +41,7 @@ export type ReportData = {
   status?: ReportStatus;
   imageUrls?: string[];
   images?: string;
+  locationLabel?: string | null;
 };
 
 export type ReportDocument = Models.Document & {
@@ -52,6 +53,7 @@ export type ReportDocument = Models.Document & {
   status: ReportStatus;
   images: string | null;
   rating: number | null;
+  locationLabel?: string | null;
 };
 
 export type UploadMediaInput = {
@@ -159,21 +161,37 @@ export function getReportMediaPreviewUrl(fileId: string): string {
 
 export async function createReportDocument(data: ReportData): Promise<ReportDocument> {
   const env = getAppwriteEnv();
+  const locationLabel = data.locationLabel?.trim();
+  const documentData: {
+    title: string;
+    category: ReportCategory;
+    description: string;
+    lng: number;
+    lat: number;
+    status: ReportStatus;
+    images: string;
+    rating: number;
+    locationLabel?: string;
+  } = {
+    title: data.title,
+    category: data.category,
+    description: data.description,
+    lng: data.lng,
+    lat: data.lat,
+    status: data.status ?? "active",
+    images: normalizeImagesField(data),
+    rating: 0,
+  };
+
+  if (locationLabel) {
+    documentData.locationLabel = locationLabel;
+  }
 
   return getAppwriteDatabases().createDocument<ReportDocument>(
     env.databaseId,
     env.reportsCollectionId,
     ID.unique(),
-    {
-      title: data.title,
-      category: data.category,
-      description: data.description,
-      lng: data.lng,
-      lat: data.lat,
-      status: data.status ?? "active",
-      images: normalizeImagesField(data),
-      rating: 0,
-    }
+    documentData
   );
 }
 
