@@ -15,6 +15,7 @@ import {
     UserLocation,
     type CameraRef,
     type GeolocationPosition,
+    type TrackUserLocationChangeEvent,
     type ViewStateChangeEvent,
     useCurrentPosition,
 } from '@maplibre/maplibre-react-native';
@@ -80,6 +81,7 @@ const LOGO_FADE_OUT_DURATION_MS = 260;
 const INTRO_LOGO_SIZE = 240;
 const INTRO_MAX_WAIT_MS = 5000;
 const POSSIBLY_FALSE_RATING_THRESHOLD = -3;
+const USER_LOCATION_MIN_DISPLACEMENT_METERS = 1;
 
 const EARTH_RADIUS_METERS = 6371000;
 
@@ -283,6 +285,7 @@ export default function Map() {
   const lastHandledFocusRef = useRef<string | null>(null);
   const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const latestUserCoordinateRef = useRef<GeoJSON.Position | null>(null);
+  const followUserLocationRef = useRef(false);
   const { width: galleryWidth, height: galleryHeight } = useWindowDimensions();
   const [introLogoOpacity] = useState(() => new Animated.Value(0));
   const [followUserLocation, setFollowUserLocation] = useState(false);
@@ -295,7 +298,7 @@ export default function Map() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
   const [currentZoom, setCurrentZoom] = useState(OVERVIEW_ZOOM_LEVEL);
-  const currentPosition = useCurrentPosition();
+  const currentPosition = useCurrentPosition({ minDisplacement: USER_LOCATION_MIN_DISPLACEMENT_METERS });
   const params = useLocalSearchParams<{ focus?: string; reportId?: string; lat?: string; lng?: string }>();
   const router = useRouter();
   const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
@@ -344,6 +347,7 @@ export default function Map() {
           'Location permission required',
           'Enable location permissions to use live tracking and heading.'
         );
+        return;
       }
     };
 
@@ -360,6 +364,11 @@ export default function Map() {
   const queueIntroTimer = useCallback((callback: () => void, delayMs: number) => {
     const timerId = setTimeout(callback, delayMs);
     introTimersRef.current.push(timerId);
+  }, []);
+
+  const setFollowUserLocationMode = useCallback((shouldFollowUserLocation: boolean) => {
+    followUserLocationRef.current = shouldFollowUserLocation;
+    setFollowUserLocation(shouldFollowUserLocation);
   }, []);
 
   useEffect(() => {
@@ -380,12 +389,12 @@ export default function Map() {
       });
 
       queueIntroTimer(() => {
-        setFollowUserLocation(true);
+        setFollowUserLocationMode(true);
         setIsCenteredOnUser(true);
         setIsMapIntroActive(false);
       }, INTRO_FLY_DURATION_MS);
     }, INTRO_DELAY_MS);
-  }, [queueIntroTimer, setIsCenteredOnUser, setIsMapIntroActive]);
+  }, [queueIntroTimer, setFollowUserLocationMode, setIsCenteredOnUser, setIsMapIntroActive]);
 
   const handleUserLocationUpdate = useCallback((location: GeolocationPosition) => {
     const liveUserCoordinate: GeoJSON.Position = [location.coords.longitude, location.coords.latitude];
@@ -454,19 +463,32 @@ export default function Map() {
       return;
     }
 
-    setFollowUserLocation(false);
+    setFollowUserLocationMode(false);
     setIsCenteredOnUser(false);
-  }, [setIsCenteredOnUser]);
+  }, [setFollowUserLocationMode, setIsCenteredOnUser]);
 
   const handleRegionDidChange = useCallback((event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
     const nextZoom = event.nativeEvent.zoom;
 
-    if (!Number.isFinite(nextZoom)) {
+    if (Number.isFinite(nextZoom)) {
+      setCurrentZoom(nextZoom);
+    }
+  }, []);
+
+  const handleTrackUserLocationChange = useCallback((event: NativeSyntheticEvent<TrackUserLocationChangeEvent>) => {
+    const trackingMode = event.nativeEvent.trackUserLocation;
+    const isTrackingUser =
+      trackingMode === 'default' ||
+      trackingMode === 'heading' ||
+      trackingMode === 'course';
+
+    if (isTrackingUser && !followUserLocationRef.current) {
       return;
     }
 
-    setCurrentZoom(nextZoom);
-  }, []);
+    setFollowUserLocationMode(isTrackingUser);
+    setIsCenteredOnUser(isTrackingUser);
+  }, [setFollowUserLocationMode, setIsCenteredOnUser]);
 
   const centerCameraOnUser = useCallback(async () => {
     let coordinate = latestUserCoordinateRef.current;
@@ -486,7 +508,7 @@ export default function Map() {
     }
 
     if (!isLngLatInServiceArea(coordinate)) {
-      setFollowUserLocation(false);
+      setFollowUserLocationMode(false);
       setIsCenteredOnUser(false);
       Alert.alert(
         'Fuera del area de cobertura',
@@ -496,7 +518,7 @@ export default function Map() {
     }
 
     // Force a manual camera move first, then re-enable follow mode.
-    setFollowUserLocation(false);
+    setFollowUserLocationMode(false);
 
     requestAnimationFrame(() => {
       cameraRef.current?.flyTo({
@@ -507,11 +529,11 @@ export default function Map() {
       });
 
       queueIntroTimer(() => {
-        setFollowUserLocation(true);
+        setFollowUserLocationMode(true);
         setIsCenteredOnUser(true);
       }, RECENTER_FLY_DURATION_MS + 50);
     });
-  }, [queueIntroTimer, setIsCenteredOnUser]);
+  }, [queueIntroTimer, setFollowUserLocationMode, setIsCenteredOnUser]);
 
   useEffect(() => {
     registerCenterOnUser(centerCameraOnUser);
@@ -544,7 +566,7 @@ export default function Map() {
   }, []);
 
   const focusReportZone = useCallback((zoneCounter: ReportZoneCounter) => {
-    setFollowUserLocation(false);
+    setFollowUserLocationMode(false);
     setIsCenteredOnUser(false);
 
     cameraRef.current?.flyTo({
@@ -553,7 +575,7 @@ export default function Map() {
       pitch: USER_PITCH,
       duration: RECENTER_FLY_DURATION_MS,
     });
-  }, [setIsCenteredOnUser]);
+  }, [setFollowUserLocationMode, setIsCenteredOnUser]);
 
   useEffect(() => {
     if (!params.focus) {
@@ -593,7 +615,7 @@ export default function Map() {
 
     const frameId = requestAnimationFrame(() => {
       lastHandledFocusRef.current = focusKey;
-      setFollowUserLocation(false);
+      setFollowUserLocationMode(false);
       setIsCenteredOnUser(false);
 
       cameraRef.current?.flyTo({
@@ -615,7 +637,7 @@ export default function Map() {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [openReportModal, params.focus, params.lat, params.lng, params.reportId, queueIntroTimer, reports, router, setIsCenteredOnUser]);
+  }, [openReportModal, params.focus, params.lat, params.lng, params.reportId, queueIntroTimer, reports, router, setFollowUserLocationMode, setIsCenteredOnUser]);
 
   const handleBottomSheetChange = useCallback((index: number) => {
     if (index === -1) {
@@ -754,12 +776,13 @@ export default function Map() {
           maxBounds={SERVICE_AREA_BOUNDS}
           maxZoom={MAX_NAVIGATION_ZOOM_LEVEL}
           minZoom={MIN_NAVIGATION_ZOOM_LEVEL}
-          trackUserLocation={followUserLocation ? 'default' : undefined}
+          onTrackUserLocationChange={handleTrackUserLocationChange}
+          pitch={followUserLocation ? USER_PITCH : undefined}
+          trackUserLocation={followUserLocation ? 'course' : undefined}
+          zoom={followUserLocation ? USER_ZOOM_LEVEL : undefined}
         />
 
-        <UserLocation
-          heading
-        />
+        <UserLocation minDisplacement={USER_LOCATION_MIN_DISPLACEMENT_METERS} />
 
         {shouldShowReportMarkers ? visibleReports.map((report) => {
           const markerStyle = CATEGORY_MARKER_STYLES[report.category] ?? {
