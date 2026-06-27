@@ -142,7 +142,6 @@ function TabsContent() {
             name: "Reportes cercanos",
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 250, 250],
-            sound: "default",
           });
         }
       } catch {
