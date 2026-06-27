@@ -183,11 +183,20 @@ function getTruthfulnessLabel(rating: number): string {
   return 'Sin votos de veracidad';
 }
 
+function formatLongSpanishDate(date: Date): string {
+  const day = new Intl.DateTimeFormat('es-CL', { day: 'numeric' }).format(date);
+  const month = new Intl.DateTimeFormat('es-CL', { month: 'long' }).format(date);
+  const year = new Intl.DateTimeFormat('es-CL', { year: 'numeric' }).format(date);
+  const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+
+  return `${day} de ${capitalizedMonth} de ${year}`;
+}
+
 function formatReportDate(isoDate: string): string {
   const timestamp = Date.parse(isoDate);
 
   if (Number.isNaN(timestamp)) {
-    return 'Sin fecha';
+    return 'sin fecha';
   }
 
   const now = Date.now();
@@ -198,24 +207,22 @@ function formatReportDate(isoDate: string): string {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffSecs < 60) {
-    return 'Hace unos segundos';
+    return 'hace unos segundos';
   }
 
   if (diffMins < 60) {
-    return `Hace ${diffMins} ${diffMins === 1 ? 'minuto' : 'minutos'}`;
+    return `hace ${diffMins} ${diffMins === 1 ? 'minuto' : 'minutos'}`;
   }
 
   if (diffHours < 24) {
-    return `Hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`;
+    return `hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`;
   }
 
   if (diffDays < 7) {
     return `Hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
   }
 
-  return new Intl.DateTimeFormat('es-CL', {
-    dateStyle: 'medium',
-  }).format(new Date(timestamp));
+  return formatLongSpanishDate(new Date(timestamp));
 }
 
 function clampIndex(value: number, maxIndex: number): number {
@@ -889,7 +896,9 @@ export default function Map() {
               <View style={styles.reportMetadata}>
                 <View style={styles.metadataItem}>
                   <Calendar size={14} color='#8795A8' />
-                  <Text style={styles.metadataText}>Reportado {formatReportDate(selectedReport.$createdAt).toLowerCase()}</Text>
+                  <Text style={styles.metadataText}>
+                    Reportado {formatReportDate(selectedReport.$createdAt).replace(/^Hace/, 'hace')}
+                  </Text>
                 </View>
               </View>
 

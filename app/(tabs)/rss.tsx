@@ -43,6 +43,14 @@ const STATUS_META: Record<string, { label: string; color: string; Icon: LucideIc
 const TAB_BAR_HEIGHT = 68;
 const POSSIBLY_FALSE_RATING_THRESHOLD = -3;
 
+function formatLongSpanishDate(date: Date): string {
+  const day = new Intl.DateTimeFormat("es-CL", { day: "numeric" }).format(date);
+  const month = new Intl.DateTimeFormat("es-CL", { month: "long" }).format(date);
+  const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+
+  return `${day} de ${capitalizedMonth}`;
+}
+
 function formatRelativeDate(dateValue: string): string {
   const timestamp = Date.parse(dateValue);
 
@@ -71,7 +79,7 @@ function formatRelativeDate(dateValue: string): string {
     return `Hace ${days} d`;
   }
 
-  return new Intl.DateTimeFormat("es-CL", { day: "2-digit", month: "short" }).format(new Date(timestamp));
+  return formatLongSpanishDate(new Date(timestamp));
 }
 
 function getReportRating(report: Pick<ReportDocument, "rating">): number {
