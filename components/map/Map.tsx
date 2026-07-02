@@ -1,589 +1,84 @@
 import {
     getReportImageUrls,
-    listLatestReports,
-    subscribeToReports,
-    voteReportRating,
-    type ReportCategory,
     type ReportDocument,
-    type ReportRatingVote,
 } from '@/services/appwrite';
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { ReportMarker } from '@/features/map/components/ReportMarker';
+import { ReportZoneMarker } from '@/features/map/components/ReportZoneMarker';
+import { IntroLogoOverlay } from '@/features/map/components/IntroLogoOverlay';
+import { ReportGalleryModal } from '@/features/map/components/ReportGalleryModal';
+import { ReportDetailsSheet } from '@/features/map/components/ReportDetailsSheet';
+import { UserLocationPuckLayer } from '@/features/map/components/UserLocationPuckLayer';
+import {
+    getReportZoneCounters,
+    type ReportZoneCounter,
+} from '@/features/map/utils/reportZones';
+import { useMapReports } from '@/features/map/hooks/useMapReports';
+import { useReportFocusParams } from '@/features/map/hooks/useReportFocusParams';
+import { useMapCameraController } from '@/features/map/hooks/useMapCameraController';
+import {
+    getReportMarkerStyle,
+    getReportStatusStyle,
+} from '@/features/map/constants/reportStyles';
+import {
+    OVERVIEW_ZOOM_LEVEL,
+    RECENTER_FLY_DURATION_MS,
+    REPORT_MARKERS_MIN_ZOOM_LEVEL,
+    REPORT_ZONE_FOCUS_ZOOM_LEVEL,
+    USER_PITCH,
+    USER_ZOOM_LEVEL,
+} from '@/features/map/constants/camera';
+import { formatDistance, getLngLatDistanceMeters } from '@/shared/geo/distance';
+import {
+    getReportLocationLabel,
+    getReportRating,
+    isReportPossiblyFalse,
+} from '@/shared/reports/reportSelectors';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import {
     Camera,
     Map as MapLibreMap,
-    Marker,
-    UserLocation,
-    type CameraRef,
-    type TrackUserLocationChangeEvent,
-    type ViewStateChangeEvent,
-    useCurrentPosition,
 } from '@maplibre/maplibre-react-native';
-import * as ExpoLocation from 'expo-location';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-    Calendar,
-    CheckIcon,
-    CircleAlertIcon,
-    FlameIcon,
-    ImageIcon,
-    LightbulbIcon,
-    MapPin,
-    ShieldIcon,
-    SirenIcon,
-    TrafficConeIcon,
-    Trash2Icon,
-    UsersIcon,
-    Volume2Icon,
-    XIcon,
-    type LucideIcon,
-} from 'lucide-react-native';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-    Alert,
-    Animated,
-    Easing,
-    FlatList,
-    Image,
-    Modal,
-    Pressable,
     StyleSheet,
-    Text,
-    type NativeSyntheticEvent,
-    useWindowDimensions,
     View,
 } from 'react-native';
-import { useMapCameraControls } from './MapCameraContext';
 import {
     MAX_NAVIGATION_ZOOM_LEVEL,
     MIN_NAVIGATION_ZOOM_LEVEL,
     SERVICE_AREA_BOUNDS,
     SERVICE_AREA_CENTER,
-    SERVICE_AREA_NAME,
     isCoordinatesInServiceArea,
-    isLngLatInServiceArea,
 } from './serviceArea';
 
 const OVERVIEW_COORDINATE: GeoJSON.Position = SERVICE_AREA_CENTER;
-const OVERVIEW_ZOOM_LEVEL = MIN_NAVIGATION_ZOOM_LEVEL;
-const REPORT_MARKERS_MIN_ZOOM_LEVEL = MIN_NAVIGATION_ZOOM_LEVEL + 1;
-const REPORT_ZONE_FOCUS_ZOOM_LEVEL = REPORT_MARKERS_MIN_ZOOM_LEVEL + 0.5;
-const REPORT_ZONE_COLUMN_COUNT = 4;
-const REPORT_ZONE_ROW_COUNT = 3;
-const USER_ZOOM_LEVEL = 16;
-const USER_PITCH = 45;
-const INTRO_DELAY_MS = 250;
-const INTRO_FLY_DURATION_MS = 1800;
-const RECENTER_FLY_DURATION_MS = 900;
-const LOGO_FADE_IN_DURATION_MS = 550;
-const LOGO_HOLD_DURATION_MS = 280;
-const LOGO_FADE_OUT_DURATION_MS = 260;
-const INTRO_LOGO_SIZE = 240;
-const INTRO_MAX_WAIT_MS = 5000;
-const POSSIBLY_FALSE_RATING_THRESHOLD = -3;
-const USER_LOCATION_MIN_DISPLACEMENT_METERS = 1;
-
-const EARTH_RADIUS_METERS = 6371000;
-
-const CATEGORY_MARKER_STYLES: Record<
-  ReportCategory,
-  { label: string; color: string; Icon: LucideIcon }
-> = {
-  security: { label: 'SEGURIDAD', color: '#00B7FF', Icon: UsersIcon },
-  traffic: { label: 'TRÁNSITO', color: '#C91F32', Icon: CircleAlertIcon },
-  infrastructure: { label: 'INFRAESTRUCTURA', color: '#E2A712', Icon: TrafficConeIcon },
-  lighting: { label: 'PROBLEMA DE LUZ', color: '#F5C648', Icon: LightbulbIcon },
-  waste: { label: 'BASURA', color: '#4EBB68', Icon: Trash2Icon },
-  fire: { label: 'INCENDIO', color: '#FF6A3D', Icon: FlameIcon },
-  noise: { label: 'RUIDOS', color: '#8D6ADE', Icon: Volume2Icon },
-  accident: { label: 'ACCIDENTE', color: '#A44A4A', Icon: SirenIcon },
-};
-
-const STATUS_STYLES: Record<string, { label: string; color: string; Icon: LucideIcon }> = {
-  active: { label: 'ACTIVO', color: '#F5C648', Icon: CircleAlertIcon },
-  solved: { label: 'SOLUCIONADO', color: '#4EBB68', Icon: CheckIcon },
-  false: { label: 'FALSO', color: '#C91F32', Icon: XIcon },
-};
-
-type ReportZoneCounter = {
-  id: string;
-  coordinate: [number, number];
-  count: number;
-};
-
-function toRadians(value: number): number {
-  return (value * Math.PI) / 180;
-}
-
-function haversineDistanceMeters(from: GeoJSON.Position, to: GeoJSON.Position): number {
-  const [fromLng, fromLat] = from;
-  const [toLng, toLat] = to;
-
-  const deltaLat = toRadians(toLat - fromLat);
-  const deltaLng = toRadians(toLng - fromLng);
-  const fromLatRad = toRadians(fromLat);
-  const toLatRad = toRadians(toLat);
-
-  const a =
-    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(fromLatRad) * Math.cos(toLatRad) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return EARTH_RADIUS_METERS * c;
-}
-
-function formatDistance(distanceMeters: number): string {
-  if (distanceMeters < 1000) {
-    return `${Math.max(1, Math.round(distanceMeters))} m`;
-  }
-
-  return `${(distanceMeters / 1000).toFixed(1)} km`;
-}
-
-function getReportLocationLabel(report: Pick<ReportDocument, 'locationLabel'>): string {
-  const locationLabel = report.locationLabel?.trim();
-
-  if (locationLabel) {
-    return locationLabel;
-  }
-
-  return 'Ubicacion aproximada';
-}
-
-function getStatusDetail(status: string): string {
-  if (status === 'solved') {
-    return 'Incidente solucionado';
-  }
-
-  if (status === 'false') {
-    return 'Marcado como falso';
-  }
-
-  return 'Reporte en revision';
-}
-
-function getReportRating(report: Pick<ReportDocument, 'rating'>): number {
-  const rating = report.rating;
-  return typeof rating === 'number' && Number.isFinite(rating) ? rating : 0;
-}
-
-function isReportPossiblyFalse(report: Pick<ReportDocument, 'rating'>): boolean {
-  return getReportRating(report) <= POSSIBLY_FALSE_RATING_THRESHOLD;
-}
-
-function formatTruthfulnessScore(rating: number): string {
-  return rating > 0 ? `+${rating}` : String(rating);
-}
-
-function getTruthfulnessLabel(rating: number): string {
-  if (rating <= POSSIBLY_FALSE_RATING_THRESHOLD) {
-    return 'Posiblemente falso';
-  }
-
-  if (rating < 0) {
-    return 'Veracidad en duda';
-  }
-
-  if (rating > 0) {
-    return 'Veracidad positiva';
-  }
-
-  return 'Sin votos de veracidad';
-}
-
-function formatLongSpanishDate(date: Date): string {
-  const day = new Intl.DateTimeFormat('es-CL', { day: 'numeric' }).format(date);
-  const month = new Intl.DateTimeFormat('es-CL', { month: 'long' }).format(date);
-  const year = new Intl.DateTimeFormat('es-CL', { year: 'numeric' }).format(date);
-  const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
-
-  return `${day} de ${capitalizedMonth} de ${year}`;
-}
-
-function formatReportDate(isoDate: string): string {
-  const timestamp = Date.parse(isoDate);
-
-  if (Number.isNaN(timestamp)) {
-    return 'sin fecha';
-  }
-
-  const now = Date.now();
-  const diffMs = now - timestamp;
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSecs < 60) {
-    return 'hace unos segundos';
-  }
-
-  if (diffMins < 60) {
-    return `hace ${diffMins} ${diffMins === 1 ? 'minuto' : 'minutos'}`;
-  }
-
-  if (diffHours < 24) {
-    return `hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`;
-  }
-
-  if (diffDays < 7) {
-    return `Hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
-  }
-
-  return formatLongSpanishDate(new Date(timestamp));
-}
-
-function clampIndex(value: number, maxIndex: number): number {
-  return Math.max(0, Math.min(maxIndex, value));
-}
-
-function getReportZoneCounters(zoneReports: ReportDocument[]): ReportZoneCounter[] {
-  const [west, south, east, north] = SERVICE_AREA_BOUNDS;
-  const lngSpan = east - west;
-  const latSpan = north - south;
-  const zones = new globalThis.Map<string, {
-    count: number;
-    lngTotal: number;
-    latTotal: number;
-  }>();
-
-  zoneReports.forEach((report) => {
-    const column = clampIndex(
-      Math.floor(((report.lng - west) / lngSpan) * REPORT_ZONE_COLUMN_COUNT),
-      REPORT_ZONE_COLUMN_COUNT - 1
-    );
-    const row = clampIndex(
-      Math.floor(((report.lat - south) / latSpan) * REPORT_ZONE_ROW_COUNT),
-      REPORT_ZONE_ROW_COUNT - 1
-    );
-    const zoneId = `${column}-${row}`;
-    const currentZone = zones.get(zoneId) ?? {
-      count: 0,
-      lngTotal: 0,
-      latTotal: 0,
-    };
-
-    currentZone.count += 1;
-    currentZone.lngTotal += report.lng;
-    currentZone.latTotal += report.lat;
-    zones.set(zoneId, currentZone);
-  });
-
-  return Array.from(zones.entries())
-    .map(([zoneId, zone]) => ({
-      id: `report-zone-${zoneId}`,
-      coordinate: [zone.lngTotal / zone.count, zone.latTotal / zone.count] as [number, number],
-      count: zone.count,
-    }))
-    .sort((firstZone, secondZone) => secondZone.count - firstZone.count);
-}
 
 export default function Map() {
-  const cameraRef = useRef<CameraRef>(null);
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const galleryListRef = useRef<FlatList<string>>(null);
-  const lastHandledFocusRef = useRef<string | null>(null);
-  const introStartedRef = useRef(false);
-  const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const latestUserCoordinateRef = useRef<GeoJSON.Position | null>(null);
-  const followUserLocationRef = useRef(false);
-  const { width: galleryWidth, height: galleryHeight } = useWindowDimensions();
-  const [introLogoOpacity] = useState(() => new Animated.Value(0));
-  const [followUserLocation, setFollowUserLocation] = useState(false);
-  const [showIntroLogo, setShowIntroLogo] = useState(false);
-  const [reports, setReports] = useState<ReportDocument[]>([]);
-  const [selectedReport, setSelectedReport] = useState<ReportDocument | null>(null);
-  const [pendingVoteReportId, setPendingVoteReportId] = useState<string | null>(null);
+  const {
+    cameraRef,
+    currentZoom,
+    flyToCoordinate,
+    followUserLocation,
+    handleRegionDidChange,
+    handleRegionWillChange,
+    handleTrackUserLocationChange,
+    introLogoOpacity,
+    queueCameraTimer,
+    setFollowUserLocationMode,
+    setIsCenteredOnUser,
+    showIntroLogo,
+    userCoordinate,
+  } = useMapCameraController();
+  const {
+    isSelectedReportVoting,
+    reports,
+    selectedReport,
+    selectReport,
+    voteSelectedReport,
+  } = useMapReports();
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [userCoordinate, setUserCoordinate] = useState<GeoJSON.Position | null>(null);
-  const [currentZoom, setCurrentZoom] = useState(OVERVIEW_ZOOM_LEVEL);
-  const currentPosition = useCurrentPosition({ minDisplacement: USER_LOCATION_MIN_DISPLACEMENT_METERS });
-  const params = useLocalSearchParams<{ focus?: string; reportId?: string; lat?: string; lng?: string }>();
-  const router = useRouter();
-  const { registerCenterOnUser, setIsCenteredOnUser, setIsMapIntroActive } = useMapCameraControls();
-
-  useEffect(() => {
-    const loadReports = async () => {
-      try {
-        const latestReports = await listLatestReports(120);
-        setReports(latestReports);
-        setSelectedReport((currentReport) => {
-          if (!currentReport) {
-            return null;
-          }
-
-          return latestReports.find((report) => report.$id === currentReport.$id) ?? currentReport;
-        });
-      } catch {
-        // Keep the map usable even if report loading fails.
-      }
-    };
-
-    void loadReports();
-
-    let unsubscribe: (() => void) | null = null;
-
-    try {
-      unsubscribe = subscribeToReports(() => {
-        void loadReports();
-      });
-    } catch {
-      // Realtime can fail if env is missing; fallback to initial load only.
-    }
-
-    return () => {
-      unsubscribe?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      introTimersRef.current.forEach((timerId) => clearTimeout(timerId));
-      introTimersRef.current = [];
-    };
-  }, []);
-
-  const queueIntroTimer = useCallback((callback: () => void, delayMs: number) => {
-    const timerId = setTimeout(callback, delayMs);
-    introTimersRef.current.push(timerId);
-  }, []);
-
-  const setFollowUserLocationMode = useCallback((shouldFollowUserLocation: boolean) => {
-    followUserLocationRef.current = shouldFollowUserLocation;
-    setFollowUserLocation(shouldFollowUserLocation);
-  }, []);
-
-  useEffect(() => {
-    setIsMapIntroActive(true);
-
-    queueIntroTimer(() => {
-      setIsMapIntroActive(false);
-    }, INTRO_MAX_WAIT_MS);
-  }, [queueIntroTimer, setIsMapIntroActive]);
-
-  const startCameraIntro = useCallback((coordinate: GeoJSON.Position) => {
-    queueIntroTimer(() => {
-      cameraRef.current?.flyTo({
-        center: coordinate as [number, number],
-        zoom: USER_ZOOM_LEVEL,
-        pitch: USER_PITCH,
-        duration: INTRO_FLY_DURATION_MS,
-      });
-
-      queueIntroTimer(() => {
-        setFollowUserLocationMode(true);
-        setIsCenteredOnUser(true);
-        setIsMapIntroActive(false);
-      }, INTRO_FLY_DURATION_MS);
-    }, INTRO_DELAY_MS);
-  }, [queueIntroTimer, setFollowUserLocationMode, setIsCenteredOnUser, setIsMapIntroActive]);
-
-  const handleUserCoordinateUpdate = useCallback((liveUserCoordinate: GeoJSON.Position) => {
-    latestUserCoordinateRef.current = liveUserCoordinate;
-    setUserCoordinate(liveUserCoordinate);
-
-    if (introStartedRef.current) {
-      return;
-    }
-
-    if (!isLngLatInServiceArea(liveUserCoordinate)) {
-      introStartedRef.current = true;
-      setIsMapIntroActive(false);
-      return;
-    }
-
-    introStartedRef.current = true;
-    setIsMapIntroActive(true);
-    setShowIntroLogo(true);
-    introLogoOpacity.setValue(0);
-
-    Animated.sequence([
-      Animated.timing(introLogoOpacity, {
-        toValue: 1,
-        duration: LOGO_FADE_IN_DURATION_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.delay(LOGO_HOLD_DURATION_MS),
-      Animated.timing(introLogoOpacity, {
-        toValue: 0,
-        duration: LOGO_FADE_OUT_DURATION_MS,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (!finished) {
-        return;
-      }
-
-      setShowIntroLogo(false);
-      startCameraIntro(liveUserCoordinate);
-    });
-  }, [introLogoOpacity, setIsMapIntroActive, startCameraIntro]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const requestInitialLocation = async () => {
-      try {
-        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-
-        if (!isMounted) {
-          return;
-        }
-
-        if (status !== 'granted') {
-          setIsMapIntroActive(false);
-          Alert.alert(
-            'Permiso de ubicacion requerido',
-            'Activa el permiso de ubicacion para usar el seguimiento en vivo.'
-          );
-          return;
-        }
-
-        const lastKnownLocation = await ExpoLocation.getLastKnownPositionAsync({
-          maxAge: 15000,
-          requiredAccuracy: 100,
-        });
-
-        if (isMounted && lastKnownLocation) {
-          const lastKnownCoordinate: GeoJSON.Position = [
-            lastKnownLocation.coords.longitude,
-            lastKnownLocation.coords.latitude,
-          ];
-
-          if (isLngLatInServiceArea(lastKnownCoordinate)) {
-            handleUserCoordinateUpdate(lastKnownCoordinate);
-            return;
-          }
-        }
-
-        const location = await ExpoLocation.getCurrentPositionAsync({
-          accuracy: ExpoLocation.Accuracy.Balanced,
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
-        handleUserCoordinateUpdate([location.coords.longitude, location.coords.latitude]);
-      } catch {
-        if (isMounted && !introStartedRef.current) {
-          setIsMapIntroActive(false);
-        }
-      }
-    };
-
-    void requestInitialLocation();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [handleUserCoordinateUpdate, setIsMapIntroActive]);
-
-  useEffect(() => {
-    if (!currentPosition) {
-      return;
-    }
-
-    const frameId = requestAnimationFrame(() => {
-      handleUserCoordinateUpdate([currentPosition.coords.longitude, currentPosition.coords.latitude]);
-    });
-
-    return () => {
-      cancelAnimationFrame(frameId);
-    };
-  }, [currentPosition, handleUserCoordinateUpdate]);
-
-  const handleRegionWillChange = useCallback((event: { nativeEvent?: { userInteraction?: boolean } }) => {
-    // Only disable follow mode for direct user map interactions.
-    const isUserInteraction = event.nativeEvent?.userInteraction === true;
-
-    if (!isUserInteraction) {
-      return;
-    }
-
-    setFollowUserLocationMode(false);
-    setIsCenteredOnUser(false);
-  }, [setFollowUserLocationMode, setIsCenteredOnUser]);
-
-  const handleRegionDidChange = useCallback((event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
-    const nextZoom = event.nativeEvent.zoom;
-
-    if (Number.isFinite(nextZoom)) {
-      setCurrentZoom(nextZoom);
-    }
-  }, []);
-
-  const handleTrackUserLocationChange = useCallback((event: NativeSyntheticEvent<TrackUserLocationChangeEvent>) => {
-    const trackingMode = event.nativeEvent.trackUserLocation;
-    const isTrackingUser =
-      trackingMode === 'default' ||
-      trackingMode === 'heading' ||
-      trackingMode === 'course';
-
-    if (isTrackingUser && !followUserLocationRef.current) {
-      return;
-    }
-
-    setFollowUserLocationMode(isTrackingUser);
-    setIsCenteredOnUser(isTrackingUser);
-  }, [setFollowUserLocationMode, setIsCenteredOnUser]);
-
-  const centerCameraOnUser = useCallback(async () => {
-    let coordinate = latestUserCoordinateRef.current;
-
-    if (!coordinate) {
-      try {
-        const location = await ExpoLocation.getCurrentPositionAsync({
-          accuracy: ExpoLocation.Accuracy.Balanced,
-        });
-
-        coordinate = [location.coords.longitude, location.coords.latitude];
-        latestUserCoordinateRef.current = coordinate;
-      } catch {
-        Alert.alert('Unable to center map', 'Could not get your current location.');
-        return;
-      }
-    }
-
-    if (!isLngLatInServiceArea(coordinate)) {
-      setFollowUserLocationMode(false);
-      setIsCenteredOnUser(false);
-      Alert.alert(
-        'Fuera del area de cobertura',
-        `Faro solo permite navegar por ${SERVICE_AREA_NAME}.`
-      );
-      return;
-    }
-
-    // Force a manual camera move first, then re-enable follow mode.
-    setFollowUserLocationMode(false);
-
-    requestAnimationFrame(() => {
-      cameraRef.current?.flyTo({
-        center: coordinate as [number, number],
-        zoom: USER_ZOOM_LEVEL,
-        pitch: USER_PITCH,
-        duration: RECENTER_FLY_DURATION_MS,
-      });
-
-      queueIntroTimer(() => {
-        setFollowUserLocationMode(true);
-        setIsCenteredOnUser(true);
-      }, RECENTER_FLY_DURATION_MS + 50);
-    });
-  }, [queueIntroTimer, setFollowUserLocationMode, setIsCenteredOnUser]);
-
-  useEffect(() => {
-    registerCenterOnUser(centerCameraOnUser);
-
-    return () => {
-      setIsMapIntroActive(false);
-      registerCenterOnUser(null);
-    };
-  }, [centerCameraOnUser, registerCenterOnUser, setIsMapIntroActive]);
-
   const visibleReports = useMemo(() => reports.filter((report) =>
     Number.isFinite(report.lat) &&
     Number.isFinite(report.lng) &&
@@ -592,136 +87,57 @@ export default function Map() {
   const shouldShowReportMarkers = currentZoom >= REPORT_MARKERS_MIN_ZOOM_LEVEL;
   const reportZoneCounters = useMemo(() => getReportZoneCounters(visibleReports), [visibleReports]);
 
-  const bottomSheetSnapPoints = ['80%'];
-
   const closeReportModal = useCallback(() => {
     bottomSheetRef.current?.dismiss();
   }, []);
 
   const openReportModal = useCallback((report: ReportDocument) => {
-    setSelectedReport(report);
+    selectReport(report);
     requestAnimationFrame(() => {
       bottomSheetRef.current?.present();
     });
-  }, []);
+  }, [selectReport]);
 
   const focusReportZone = useCallback((zoneCounter: ReportZoneCounter) => {
-    setFollowUserLocationMode(false);
-    setIsCenteredOnUser(false);
-
-    cameraRef.current?.flyTo({
-      center: zoneCounter.coordinate,
+    flyToCoordinate(zoneCounter.coordinate, {
       zoom: REPORT_ZONE_FOCUS_ZOOM_LEVEL,
       pitch: USER_PITCH,
       duration: RECENTER_FLY_DURATION_MS,
     });
-  }, [setFollowUserLocationMode, setIsCenteredOnUser]);
+  }, [flyToCoordinate]);
 
-  useEffect(() => {
-    if (!params.focus) {
-      return;
-    }
-
-    const focusKey = String(params.focus);
-
-    if (lastHandledFocusRef.current === focusKey) {
-      return;
-    }
-
-    const targetReportId = params.reportId ? String(params.reportId) : null;
-    const targetLat = params.lat ? Number(params.lat) : Number.NaN;
-    const targetLng = params.lng ? Number(params.lng) : Number.NaN;
-    const hasValidCoordinates = Number.isFinite(targetLat) && Number.isFinite(targetLng);
-
-    const targetReport = targetReportId
-      ? reports.find((report) => report.$id === targetReportId) ?? null
-      : null;
-
-    if (!targetReport && targetReportId) {
-      return;
-    }
-
-    const centerCoordinate: GeoJSON.Position | null = targetReport
-      ? [targetReport.lng, targetReport.lat]
-      : hasValidCoordinates
-        ? [targetLng, targetLat]
-        : null;
-
-    if (!centerCoordinate || !isLngLatInServiceArea(centerCoordinate)) {
-      lastHandledFocusRef.current = focusKey;
-      router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
-      return;
-    }
-
-    const frameId = requestAnimationFrame(() => {
-      lastHandledFocusRef.current = focusKey;
-      setFollowUserLocationMode(false);
-      setIsCenteredOnUser(false);
-
-      cameraRef.current?.flyTo({
-        center: centerCoordinate as [number, number],
-        zoom: USER_ZOOM_LEVEL,
-        pitch: USER_PITCH,
-        duration: RECENTER_FLY_DURATION_MS,
-      });
-
-      if (targetReport) {
-        queueIntroTimer(() => {
-          openReportModal(targetReport);
-        }, RECENTER_FLY_DURATION_MS + 60);
-      }
-
-      router.setParams({ focus: undefined, reportId: undefined, lat: undefined, lng: undefined });
-    });
-
-    return () => {
-      cancelAnimationFrame(frameId);
-    };
-  }, [openReportModal, params.focus, params.lat, params.lng, params.reportId, queueIntroTimer, reports, router, setFollowUserLocationMode, setIsCenteredOnUser]);
+  useReportFocusParams({
+    cameraRef,
+    focusDuration: RECENTER_FLY_DURATION_MS,
+    focusPitch: USER_PITCH,
+    focusZoom: USER_ZOOM_LEVEL,
+    onOpenReport: openReportModal,
+    queueTimer: queueCameraTimer,
+    reports,
+    setFollowUserLocationMode,
+    setIsCenteredOnUser,
+  });
 
   const handleBottomSheetChange = useCallback((index: number) => {
     if (index === -1) {
-      setSelectedReport(null);
+      selectReport(null);
       setIsGalleryVisible(false);
       setSelectedImageIndex(0);
     }
-  }, []);
-
-  const renderBottomSheetBackdrop = useCallback((props: any) => (
-    <BottomSheetBackdrop
-      {...props}
-      appearsOnIndex={0}
-      disappearsOnIndex={-1}
-      pressBehavior='close'
-      opacity={0.48}
-    />
-  ), []);
+  }, [selectReport]);
 
   const selectedReportDistance = selectedReport && userCoordinate
-    ? formatDistance(haversineDistanceMeters(userCoordinate, [selectedReport.lng, selectedReport.lat]))
+    ? formatDistance(getLngLatDistanceMeters(userCoordinate, [selectedReport.lng, selectedReport.lat]))
     : 'No disponible';
 
   const selectedReportLocationLabel = selectedReport ? getReportLocationLabel(selectedReport) : 'Ubicacion no disponible';
   const selectedReportRating = selectedReport ? getReportRating(selectedReport) : 0;
   const selectedReportIsPossiblyFalse = selectedReport ? isReportPossiblyFalse(selectedReport) : false;
-  const isSelectedReportVoting = selectedReport ? pendingVoteReportId === selectedReport.$id : false;
   const selectedReportImages = selectedReport ? getReportImageUrls(selectedReport) : [];
 
-  const selectedMarkerStyle = selectedReport
-    ? CATEGORY_MARKER_STYLES[selectedReport.category] ?? {
-      label: selectedReport.category.toUpperCase(),
-      color: '#00B7FF',
-      Icon: ShieldIcon,
-    }
-    : null;
+  const selectedMarkerStyle = selectedReport ? getReportMarkerStyle(selectedReport.category) : null;
 
-  const selectedStatusStyle = selectedReport
-    ? STATUS_STYLES[selectedReport.status] ?? {
-      label: selectedReport.status.toUpperCase(),
-      color: '#8FA7BD',
-      Icon: ShieldIcon,
-    }
-    : null;
+  const selectedStatusStyle = selectedReport ? getReportStatusStyle(selectedReport.status) : null;
 
   const openGalleryAtIndex = useCallback((index: number) => {
     if (selectedReportImages.length === 0) {
@@ -736,64 +152,6 @@ export default function Map() {
   const closeGallery = useCallback(() => {
     setIsGalleryVisible(false);
   }, []);
-
-  const handleReportVote = useCallback(async (vote: ReportRatingVote) => {
-    if (!selectedReport || pendingVoteReportId) {
-      return;
-    }
-
-    const reportId = selectedReport.$id;
-    const previousReport = selectedReport;
-    const voteDelta = vote === 'truthful' ? 1 : -1;
-    const optimisticReport = {
-      ...selectedReport,
-      rating: getReportRating(selectedReport) + voteDelta,
-    };
-
-    setPendingVoteReportId(reportId);
-    setSelectedReport(optimisticReport);
-    setReports((currentReports) =>
-      currentReports.map((report) => (report.$id === reportId ? optimisticReport : report))
-    );
-
-    try {
-      const updatedReport = await voteReportRating(reportId, vote);
-
-      setReports((currentReports) =>
-        currentReports.map((report) => (report.$id === reportId ? updatedReport : report))
-      );
-      setSelectedReport((currentReport) =>
-        currentReport?.$id === reportId ? updatedReport : currentReport
-      );
-    } catch (error) {
-      setReports((currentReports) =>
-        currentReports.map((report) => (report.$id === reportId ? previousReport : report))
-      );
-      setSelectedReport((currentReport) =>
-        currentReport?.$id === reportId ? previousReport : currentReport
-      );
-
-      Alert.alert(
-        'No se pudo registrar el voto',
-        error instanceof Error ? error.message : 'Intentalo nuevamente en unos segundos.'
-      );
-    } finally {
-      setPendingVoteReportId((currentReportId) => (currentReportId === reportId ? null : currentReportId));
-    }
-  }, [pendingVoteReportId, selectedReport]);
-
-  useEffect(() => {
-    if (!isGalleryVisible || selectedReportImages.length === 0) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      galleryListRef.current?.scrollToIndex({
-        index: selectedImageIndex,
-        animated: false,
-      });
-    });
-  }, [isGalleryVisible, selectedImageIndex, selectedReportImages.length]);
 
   return (
     <View style={styles.container}>
@@ -823,332 +181,56 @@ export default function Map() {
           zoom={followUserLocation ? USER_ZOOM_LEVEL : undefined}
         />
 
-        <UserLocation minDisplacement={USER_LOCATION_MIN_DISPLACEMENT_METERS} />
+        {userCoordinate ? <UserLocationPuckLayer coordinate={userCoordinate} /> : null}
 
         {shouldShowReportMarkers ? visibleReports.map((report) => {
-          const markerStyle = CATEGORY_MARKER_STYLES[report.category] ?? {
-            label: report.category.toUpperCase(),
-            color: '#00B7FF',
-            Icon: ShieldIcon,
-          };
-          const isPossiblyFalse = isReportPossiblyFalse(report);
+          const markerStyle = getReportMarkerStyle(report.category);
 
           return (
-            <Marker
+            <ReportMarker
               key={report.$id}
-              id={report.$id}
-              lngLat={[report.lng, report.lat]}
-              anchor='bottom'
-              onPress={() => openReportModal(report)}
-            >
-              <View collapsable={false} style={styles.markerContainer}>
-                <View style={[styles.markerIconCircle, { backgroundColor: markerStyle.color }]}> 
-                  <markerStyle.Icon size={14} color='#06121E' strokeWidth={2.4} />
-                </View>
-
-                {isPossiblyFalse ? (
-                  <View style={styles.markerWarningPill}>
-                    <CircleAlertIcon size={10} color='#FFB4B4' strokeWidth={2.8} />
-                    <Text numberOfLines={1} style={styles.markerWarningText}>
-                      DUDOSO
-                    </Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.markerLabelPill}>
-                  <Text numberOfLines={1} style={styles.markerLabelText}>
-                    {markerStyle.label}
-                  </Text>
-                </View>
-
-                <View style={styles.markerTip} />
-              </View>
-            </Marker>
+              report={report}
+              markerStyle={markerStyle}
+              isPossiblyFalse={isReportPossiblyFalse(report)}
+              onPress={openReportModal}
+            />
           );
         }) : reportZoneCounters.map((zoneCounter) => (
-          <Marker
+          <ReportZoneMarker
             key={zoneCounter.id}
-            id={zoneCounter.id}
-            lngLat={zoneCounter.coordinate}
-            anchor='center'
-            onPress={() => focusReportZone(zoneCounter)}
-          >
-            <View
-              accessibilityLabel={`${zoneCounter.count} ${zoneCounter.count === 1 ? 'reporte' : 'reportes'} en esta zona. Toca para acercar.`}
-              accessibilityRole='button'
-              accessible
-              collapsable={false}
-              style={styles.zoneCounterContainer}
-            >
-              <View style={styles.zoneCounterBubble}>
-                <CircleAlertIcon size={15} color='#06121E' strokeWidth={2.8} />
-                <Text numberOfLines={1} style={styles.zoneCounterCount}>
-                  {zoneCounter.count}
-                </Text>
-              </View>
-
-              <View style={styles.zoneCounterLabelPill}>
-                <Text numberOfLines={1} style={styles.zoneCounterLabelText}>
-                  {zoneCounter.count === 1 ? 'REPORTE' : 'REPORTES'}
-                </Text>
-              </View>
-            </View>
-          </Marker>
+            zoneCounter={zoneCounter}
+            onPress={focusReportZone}
+          />
         ))}
       </MapLibreMap>
 
-      <BottomSheetModal
-        ref={bottomSheetRef}
-        index={0}
-        snapPoints={bottomSheetSnapPoints}
+      <ReportDetailsSheet
+        sheetRef={bottomSheetRef}
+        report={selectedReport}
+        markerStyle={selectedMarkerStyle}
+        statusStyle={selectedStatusStyle}
+        imageUrls={selectedReportImages}
+        distanceLabel={selectedReportDistance}
+        locationLabel={selectedReportLocationLabel}
+        rating={selectedReportRating}
+        isPossiblyFalse={selectedReportIsPossiblyFalse}
+        isVoting={isSelectedReportVoting}
         onChange={handleBottomSheetChange}
-        enableDynamicSizing={false}
-        enablePanDownToClose
-        backdropComponent={renderBottomSheetBackdrop}
-        handleIndicatorStyle={styles.bottomSheetHandle}
-        backgroundStyle={styles.bottomSheetBackground}
-      >
-        {selectedReport && selectedMarkerStyle ? (
-          <BottomSheetScrollView
-            contentContainerStyle={styles.bottomSheetContent}
-            showsVerticalScrollIndicator
-          >
-            <View style={styles.reportHero}>
-              {selectedReportImages.length > 0 ? (
-                <Pressable onPress={() => openGalleryAtIndex(0)} style={styles.reportHeroMedia}>
-                  <Image
-                    source={{ uri: selectedReportImages[0] }}
-                    style={styles.reportHeroImage}
-                    resizeMode='cover'
-                  />
-                </Pressable>
-              ) : (
-                <View style={styles.reportHeroFallback}>
-                  <selectedMarkerStyle.Icon size={40} color={selectedMarkerStyle.color} strokeWidth={2.2} />
-                  <Text style={styles.reportHeroFallbackText}>{selectedMarkerStyle.label}</Text>
-                </View>
-              )}
-
-              <Pressable onPress={closeReportModal} style={styles.closeButton} hitSlop={10}>
-                <XIcon color='#F3F7FF' size={20} />
-              </Pressable>
-
-              <View style={styles.heroBadgesRow}>
-                <View style={[styles.categoryBadge, { borderColor: `${selectedMarkerStyle.color}80` }]}>
-                  <selectedMarkerStyle.Icon size={12} color={selectedMarkerStyle.color} strokeWidth={2.8} />
-                  <Text style={[styles.categoryBadgeText, { color: selectedMarkerStyle.color }]}>
-                    {selectedMarkerStyle.label}
-                  </Text>
-                </View>
-
-                {selectedReportImages.length > 0 ? (
-                  <View style={styles.photoCountBadge}>
-                    <ImageIcon size={14} color='#D5E4FB' strokeWidth={2.2} />
-                    <Text style={styles.photoCountText}>
-                      {selectedReportImages.length} {selectedReportImages.length === 1 ? 'imagen' : 'imagenes'}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-
-            <View style={styles.reportSummaryBody}>
-              <View style={styles.reportMetadata}>
-                <View style={styles.metadataItem}>
-                  <MapPin size={14} color='#9AA7B8' />
-                  <Text numberOfLines={1} style={styles.metadataText}>
-                    {selectedReportDistance} · {selectedReportLocationLabel}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.reportTitle}>{selectedReport.title?.trim() || 'Sin titulo'}</Text>
-
-              <View style={styles.reportMetadata}>
-                <View style={styles.metadataItem}>
-                  <Calendar size={14} color='#8795A8' />
-                  <Text style={styles.metadataText}>
-                    Reportado {formatReportDate(selectedReport.$createdAt).replace(/^Hace/, 'hace')}
-                  </Text>
-                </View>
-              </View>
-
-              {selectedStatusStyle ? (
-                <View
-                  style={[
-                    styles.statusBanner,
-                    {
-                      backgroundColor: `${selectedStatusStyle.color}24`,
-                      borderColor: `${selectedStatusStyle.color}80`,
-                    },
-                  ]}
-                >
-                  <selectedStatusStyle.Icon size={18} color={selectedStatusStyle.color} strokeWidth={2.8} />
-                  <Text style={styles.statusBannerText} numberOfLines={1}>
-                    <Text style={{ color: '#F3F8FF', fontWeight: '900' }}>{selectedStatusStyle.label}</Text>
-                    {' · '}
-                    {getStatusDetail(selectedReport.status)}
-                  </Text>
-                </View>
-              ) : null}
-
-              {selectedReportIsPossiblyFalse ? (
-                <View style={styles.truthWarningBanner}>
-                  <CircleAlertIcon size={20} color='#FF8B8B' strokeWidth={2.8} />
-                  <View style={styles.truthWarningCopy}>
-                    <Text style={styles.truthWarningTitle}>Posiblemente falso</Text>
-                    <Text style={styles.truthWarningText}>
-                      Este reporte acumula varios votos negativos. Se mantiene visible como advertencia.
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.truthfulnessPanel}>
-                <View
-                  style={[
-                    styles.truthfulnessScoreBadge,
-                    selectedReportRating < 0 && styles.truthfulnessScoreBadgeNegative,
-                    selectedReportRating > 0 && styles.truthfulnessScoreBadgePositive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.truthfulnessScoreText,
-                      selectedReportRating < 0 && styles.truthfulnessScoreTextNegative,
-                      selectedReportRating > 0 && styles.truthfulnessScoreTextPositive,
-                    ]}
-                  >
-                    {formatTruthfulnessScore(selectedReportRating)}
-                  </Text>
-                </View>
-
-                <View style={styles.truthfulnessCopy}>
-                  <Text style={styles.truthfulnessLabel}>
-                    {getTruthfulnessLabel(selectedReportRating)}
-                  </Text>
-                  <Text style={styles.truthfulnessText}>Puntaje de veracidad de la comunidad</Text>
-                </View>
-              </View>
-
-              <View style={styles.voteActions}>
-                <Pressable
-                  accessibilityRole='button'
-                  accessibilityLabel='Marcar reporte como veridico'
-                  disabled={isSelectedReportVoting}
-                  onPress={() => {
-                    void handleReportVote('truthful');
-                  }}
-                  style={({ pressed }) => [
-                    styles.voteButton,
-                    styles.truthVoteButton,
-                    isSelectedReportVoting && styles.voteButtonDisabled,
-                    pressed && styles.voteButtonPressed,
-                  ]}
-                >
-                  <CheckIcon size={16} color='#167A3E' strokeWidth={3} />
-                  <Text style={[styles.voteButtonText, styles.truthVoteButtonText]}>Veridico</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole='button'
-                  accessibilityLabel='Marcar reporte como falso'
-                  disabled={isSelectedReportVoting}
-                  onPress={() => {
-                    void handleReportVote('false');
-                  }}
-                  style={({ pressed }) => [
-                    styles.voteButton,
-                    styles.falseVoteButton,
-                    isSelectedReportVoting && styles.voteButtonDisabled,
-                    pressed && styles.voteButtonPressed,
-                  ]}
-                >
-                  <XIcon size={16} color='#FF8B8B' strokeWidth={3} />
-                  <Text style={styles.voteButtonText}>Falso</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.descriptionSection}>
-                <Text style={styles.descriptionTitle}>Resumen</Text>
-                <Text style={styles.descriptionText}>
-                  {selectedReport.description?.trim() || 'Sin descripcion'}
-                </Text>
-              </View>
-            </View>
-
-          </BottomSheetScrollView>
-        ) : null}
-      </BottomSheetModal>
-
-      <Modal
+        onClose={closeReportModal}
+        onOpenGalleryAtIndex={openGalleryAtIndex}
+        onVote={(vote) => {
+          void voteSelectedReport(vote);
+        }}
+      />
+      <ReportGalleryModal
         visible={isGalleryVisible}
-        transparent
-        animationType='fade'
-        onRequestClose={closeGallery}
-        statusBarTranslucent
-      >
-        <View style={styles.galleryOverlay}>
-          <View style={styles.galleryHeader}>
-            <View style={styles.galleryCounterChip}>
-              <ImageIcon size={14} color='#D5E4FB' strokeWidth={2.2} />
-              <Text style={styles.galleryCounterText}>
-                {selectedImageIndex + 1}/{Math.max(1, selectedReportImages.length)}
-              </Text>
-            </View>
-            <Pressable onPress={closeGallery} style={styles.galleryCloseButton} hitSlop={10}>
-              <XIcon color='#D5E4FB' size={21} />
-            </Pressable>
-          </View>
+        imageUrls={selectedReportImages}
+        selectedIndex={selectedImageIndex}
+        onClose={closeGallery}
+        onSelectedIndexChange={setSelectedImageIndex}
+      />
 
-          <FlatList
-            ref={galleryListRef}
-            data={selectedReportImages}
-            keyExtractor={(item, index) => `${item}-${index}`}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialNumToRender={1}
-            maxToRenderPerBatch={2}
-            windowSize={2}
-            getItemLayout={(_, index) => ({
-              length: galleryWidth,
-              offset: galleryWidth * index,
-              index,
-            })}
-            onScrollToIndexFailed={() => {
-              galleryListRef.current?.scrollToOffset({
-                offset: selectedImageIndex * galleryWidth,
-                animated: false,
-              });
-            }}
-            onMomentumScrollEnd={(event) => {
-              const offsetX = event.nativeEvent.contentOffset.x;
-              const nextIndex = Math.round(offsetX / Math.max(1, galleryWidth));
-              setSelectedImageIndex(Math.max(0, Math.min(nextIndex, selectedReportImages.length - 1)));
-            }}
-            renderItem={({ item }) => (
-              <View style={[styles.gallerySlide, { width: galleryWidth }]}> 
-                <Image
-                  source={{ uri: item }}
-                  style={[styles.galleryImage, { maxHeight: galleryHeight * 0.78 }]}
-                  resizeMode='contain'
-                />
-              </View>
-            )}
-          />
-        </View>
-      </Modal>
-
-      {showIntroLogo ? (
-        <View pointerEvents='none' style={styles.introOverlay}>
-          <Animated.Image
-            source={require('@/assets/faro_full_nobg.png')}
-            style={[styles.introLogo, { opacity: introLogoOpacity }]}
-            resizeMode='contain'
-          />
-        </View>
-      ) : null}
+      {showIntroLogo ? <IntroLogoOverlay opacity={introLogoOpacity} /> : null}
     </View>
   )
 }
@@ -1159,469 +241,5 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  introOverlay: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(5, 10, 18, 0.32)',
-  },
-  introLogo: {
-    width: INTRO_LOGO_SIZE,
-    height: INTRO_LOGO_SIZE,
-  },
-  markerContainer: {
-    alignItems: 'center',
-    width: 108,
-    minHeight: 78,
-    justifyContent: 'flex-end',
-    paddingBottom: 0,
-  },
-  markerIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(8, 26, 42, 0.2)',
-    shadowColor: '#000',
-    shadowOpacity: 0.26,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  markerWarningPill: {
-    marginTop: 5,
-    backgroundColor: '#3A1717',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 139, 139, 0.42)',
-    maxWidth: 82,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  markerWarningText: {
-    color: '#FFB4B4',
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 0.4,
-  },
-  markerLabelPill: {
-    marginTop: 6,
-    backgroundColor: '#2E3A5D',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(149, 174, 220, 0.2)',
-    maxWidth: 104,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  markerTip: {
-    width: 0,
-    height: 0,
-    marginTop: 3,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#2E3A5D',
-  },
-  markerLabelText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#DCE8FF',
-    letterSpacing: 0.4,
-  },
-  zoneCounterContainer: {
-    alignItems: 'center',
-    width: 86,
-    minHeight: 72,
-    justifyContent: 'center',
-  },
-  zoneCounterBubble: {
-    minWidth: 54,
-    height: 46,
-    borderRadius: 23,
-    paddingHorizontal: 12,
-    backgroundColor: '#F5C648',
-    borderWidth: 2,
-    borderColor: 'rgba(8, 26, 42, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.24,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  zoneCounterCount: {
-    color: '#06121E',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  zoneCounterLabelPill: {
-    marginTop: 5,
-    backgroundColor: '#151515',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 198, 72, 0.34)',
-  },
-  zoneCounterLabelText: {
-    color: '#F4E6A5',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  bottomSheetHandle: {
-    width: 38,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: 'rgba(245, 248, 255, 0.34)',
-  },
-  bottomSheetBackground: {
-    backgroundColor: '#151515',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  bottomSheetContent: {
-    paddingHorizontal: 14,
-    paddingBottom: 34,
-    gap: 0,
-  },
-  reportHero: {
-    height: 214,
-    marginHorizontal: -14,
-    marginTop: -2,
-    backgroundColor: '#202020',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  reportHeroMedia: {
-    flex: 1,
-  },
-  reportHeroImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#202020',
-  },
-  reportHeroFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1D1D1D',
-    gap: 8,
-  },
-  reportHeroFallbackText: {
-    color: '#EDEDED',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  heroBadgesRow: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  reportSummaryBody: {
-    paddingTop: 14,
-    gap: 10,
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.76)',
-  },
-  categoryBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-  },
-  reportTitle: {
-    color: '#FFFFFF',
-    fontSize: 23,
-    fontWeight: '900',
-    lineHeight: 28,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(17, 17, 17, 0.68)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  reportMetadata: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 0,
-    gap: 6,
-  },
-  metadataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-  },
-  metadataText: {
-    color: '#9C9C9C',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  photoCountBadge: {
-    backgroundColor: 'rgba(18, 18, 18, 0.76)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  photoCountText: {
-    color: '#EDEDED',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  galleryOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(3, 8, 14, 0.97)',
-    justifyContent: 'center',
-  },
-  galleryHeader: {
-    position: 'absolute',
-    top: 56,
-    left: 16,
-    right: 16,
-    zIndex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  galleryCounterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 216, 242, 0.28)',
-    backgroundColor: 'rgba(8, 21, 37, 0.62)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  galleryCounterText: {
-    color: '#D5E4FB',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  galleryCloseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 216, 242, 0.28)',
-    backgroundColor: 'rgba(8, 21, 37, 0.62)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gallerySlide: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  galleryImage: {
-    width: '100%',
-    height: '100%',
-  },
-  statusBanner: {
-    minHeight: 44,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusBannerText: {
-    flex: 1,
-    color: '#E5E5E5',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  truthWarningBanner: {
-    minHeight: 58,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 139, 139, 0.52)',
-    backgroundColor: 'rgba(201, 31, 50, 0.18)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  truthWarningCopy: {
-    flex: 1,
-    gap: 3,
-  },
-  truthWarningTitle: {
-    color: '#FFE4E4',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  truthWarningText: {
-    color: '#F6CACA',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
-  truthfulnessPanel: {
-    minHeight: 58,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: '#1F1F1F',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  truthfulnessScoreBadge: {
-    minWidth: 44,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#2E2E2E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  truthfulnessScoreBadgeNegative: {
-    backgroundColor: '#3A1717',
-    borderColor: 'rgba(255, 139, 139, 0.38)',
-  },
-  truthfulnessScoreBadgePositive: {
-    backgroundColor: '#DFF7E9',
-    borderColor: 'rgba(99, 220, 144, 0.42)',
-  },
-  truthfulnessScoreText: {
-    color: '#EDEDED',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  truthfulnessScoreTextNegative: {
-    color: '#FFB4B4',
-  },
-  truthfulnessScoreTextPositive: {
-    color: '#167A3E',
-  },
-  truthfulnessCopy: {
-    flex: 1,
-    gap: 3,
-  },
-  truthfulnessLabel: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  truthfulnessText: {
-    color: '#A9A9A9',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  voteActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  voteButton: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 999,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderWidth: 1,
-  },
-  truthVoteButton: {
-    backgroundColor: '#F4F4F4',
-    borderColor: 'rgba(255, 255, 255, 0.72)',
-  },
-  falseVoteButton: {
-    backgroundColor: '#2E2E2E',
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  voteButtonPressed: {
-    opacity: 0.76,
-    transform: [{ scale: 0.99 }],
-  },
-  voteButtonDisabled: {
-    opacity: 0.62,
-  },
-  voteButtonText: {
-    color: '#F7F7F7',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  truthVoteButtonText: {
-    color: '#111111',
-  },
-  descriptionSection: {
-    marginTop: 12,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-    gap: 10,
-  },
-  descriptionTitle: {
-    color: '#FFFFFF',
-    fontSize: 23,
-    fontWeight: '900',
-  },
-  descriptionText: {
-    color: '#CFCFCF',
-    fontSize: 16,
-    lineHeight: 23,
   },
 });
