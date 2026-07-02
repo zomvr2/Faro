@@ -7,6 +7,7 @@ export const REPORT_CATEGORIES = [
   "fire",
   "noise",
   "accident",
+  "event",
 ] as const;
 
 export const REPORT_STATUSES = ["active", "solved", "false"] as const;

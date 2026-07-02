@@ -5,6 +5,7 @@ import {
 import { Image } from "expo-image";
 import {
   CameraIcon,
+  CalendarClockIcon,
   ChevronsRightIcon,
   CircleAlertIcon,
   FlameIcon,
@@ -58,6 +59,7 @@ export function AddReportSheet({
       { value: "lighting" as const, label: "Problema de luz", Icon: LightbulbIcon },
       { value: "noise" as const, label: "Ruidos", Icon: Volume2Icon },
       { value: "fire" as const, label: "Incendio", Icon: FlameIcon },
+      { value: "event" as const, label: "Evento", Icon: CalendarClockIcon },
     ],
     []
   );

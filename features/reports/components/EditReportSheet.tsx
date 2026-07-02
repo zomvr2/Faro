@@ -5,6 +5,7 @@ import {
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import {
+  CalendarClockIcon,
   CheckIcon,
   CircleAlertIcon,
   FlameIcon,
@@ -67,6 +68,7 @@ export function EditReportSheet({
       { value: "lighting", label: "Problema de luz", Icon: LightbulbIcon },
       { value: "noise", label: "Ruidos", Icon: Volume2Icon },
       { value: "fire", label: "Incendio", Icon: FlameIcon },
+      { value: "event", label: "Evento", Icon: CalendarClockIcon },
     ],
     []
   );

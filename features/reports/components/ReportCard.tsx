@@ -34,6 +34,7 @@ const CATEGORY_META: Record<string, { label: string; color: string; Icon: Lucide
   fire: { label: "Incendio", color: "#FF6A3D", Icon: FlameIcon },
   noise: { label: "Ruidos", color: "#9A7BFF", Icon: Volume2Icon },
   accident: { label: "Accidente", color: "#A44A4A", Icon: SirenIcon },
+  event: { label: "Evento", color: "#2FC2A6", Icon: CalendarClockIcon },
 };
 
 const STATUS_META: Record<string, { label: string; color: string; Icon: LucideIcon }> = {

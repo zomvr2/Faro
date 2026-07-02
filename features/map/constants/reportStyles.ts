@@ -1,4 +1,5 @@
 import {
+  CalendarClockIcon,
   CheckIcon,
   CircleAlertIcon,
   FlameIcon,
@@ -30,6 +31,7 @@ export const REPORT_CATEGORY_MARKER_STYLES: Record<ReportCategory, ReportVisualS
   fire: { label: "INCENDIO", color: "#FF6A3D", Icon: FlameIcon },
   noise: { label: "RUIDOS", color: "#8D6ADE", Icon: Volume2Icon },
   accident: { label: "ACCIDENTE", color: "#A44A4A", Icon: SirenIcon },
+  event: { label: "EVENTO", color: "#2FC2A6", Icon: CalendarClockIcon },
 };
 
 export const REPORT_STATUS_STYLES: Record<string, ReportVisualStyle> = {
