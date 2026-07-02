@@ -17,7 +17,7 @@ const MapCameraContext = createContext<MapCameraContextValue | undefined>(undefi
 export function MapCameraProvider({ children }: PropsWithChildren) {
   const [centerOnUserHandler, setCenterOnUserHandler] = useState<CenterOnUserHandler | null>(null);
   const [isCenteredOnUser, setIsCenteredOnUser] = useState(false);
-  const [isMapIntroActive, setIsMapIntroActive] = useState(true);
+  const [isMapIntroActive, setIsMapIntroActive] = useState(false);
 
   const centerOnUser = useCallback(async () => {
     if (!centerOnUserHandler) {

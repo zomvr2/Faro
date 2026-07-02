@@ -14,7 +14,6 @@ import {
     Marker,
     UserLocation,
     type CameraRef,
-    type GeolocationPosition,
     type TrackUserLocationChangeEvent,
     type ViewStateChangeEvent,
     useCurrentPosition,
@@ -283,13 +282,13 @@ export default function Map() {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const galleryListRef = useRef<FlatList<string>>(null);
   const lastHandledFocusRef = useRef<string | null>(null);
+  const introStartedRef = useRef(false);
   const introTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const latestUserCoordinateRef = useRef<GeoJSON.Position | null>(null);
   const followUserLocationRef = useRef(false);
   const { width: galleryWidth, height: galleryHeight } = useWindowDimensions();
   const [introLogoOpacity] = useState(() => new Animated.Value(0));
   const [followUserLocation, setFollowUserLocation] = useState(false);
-  const [introStarted, setIntroStarted] = useState(false);
   const [showIntroLogo, setShowIntroLogo] = useState(false);
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportDocument | null>(null);
@@ -338,23 +337,6 @@ export default function Map() {
   }, []);
 
   useEffect(() => {
-    const requestPermissions = async () => {
-      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-
-      if (status !== 'granted') {
-        setIsMapIntroActive(false);
-        Alert.alert(
-          'Location permission required',
-          'Enable location permissions to use live tracking and heading.'
-        );
-        return;
-      }
-    };
-
-    requestPermissions();
-  }, [setIsMapIntroActive]);
-
-  useEffect(() => {
     return () => {
       introTimersRef.current.forEach((timerId) => clearTimeout(timerId));
       introTimersRef.current = [];
@@ -396,23 +378,21 @@ export default function Map() {
     }, INTRO_DELAY_MS);
   }, [queueIntroTimer, setFollowUserLocationMode, setIsCenteredOnUser, setIsMapIntroActive]);
 
-  const handleUserLocationUpdate = useCallback((location: GeolocationPosition) => {
-    const liveUserCoordinate: GeoJSON.Position = [location.coords.longitude, location.coords.latitude];
-
+  const handleUserCoordinateUpdate = useCallback((liveUserCoordinate: GeoJSON.Position) => {
     latestUserCoordinateRef.current = liveUserCoordinate;
     setUserCoordinate(liveUserCoordinate);
 
-    if (introStarted) {
+    if (introStartedRef.current) {
       return;
     }
 
     if (!isLngLatInServiceArea(liveUserCoordinate)) {
-      setIntroStarted(true);
+      introStartedRef.current = true;
       setIsMapIntroActive(false);
       return;
     }
 
-    setIntroStarted(true);
+    introStartedRef.current = true;
     setIsMapIntroActive(true);
     setShowIntroLogo(true);
     introLogoOpacity.setValue(0);
@@ -439,7 +419,67 @@ export default function Map() {
       setShowIntroLogo(false);
       startCameraIntro(liveUserCoordinate);
     });
-  }, [introLogoOpacity, introStarted, setIsMapIntroActive, startCameraIntro]);
+  }, [introLogoOpacity, setIsMapIntroActive, startCameraIntro]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const requestInitialLocation = async () => {
+      try {
+        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (status !== 'granted') {
+          setIsMapIntroActive(false);
+          Alert.alert(
+            'Permiso de ubicacion requerido',
+            'Activa el permiso de ubicacion para usar el seguimiento en vivo.'
+          );
+          return;
+        }
+
+        const lastKnownLocation = await ExpoLocation.getLastKnownPositionAsync({
+          maxAge: 15000,
+          requiredAccuracy: 100,
+        });
+
+        if (isMounted && lastKnownLocation) {
+          const lastKnownCoordinate: GeoJSON.Position = [
+            lastKnownLocation.coords.longitude,
+            lastKnownLocation.coords.latitude,
+          ];
+
+          if (isLngLatInServiceArea(lastKnownCoordinate)) {
+            handleUserCoordinateUpdate(lastKnownCoordinate);
+            return;
+          }
+        }
+
+        const location = await ExpoLocation.getCurrentPositionAsync({
+          accuracy: ExpoLocation.Accuracy.Balanced,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        handleUserCoordinateUpdate([location.coords.longitude, location.coords.latitude]);
+      } catch {
+        if (isMounted && !introStartedRef.current) {
+          setIsMapIntroActive(false);
+        }
+      }
+    };
+
+    void requestInitialLocation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [handleUserCoordinateUpdate, setIsMapIntroActive]);
 
   useEffect(() => {
     if (!currentPosition) {
@@ -447,13 +487,13 @@ export default function Map() {
     }
 
     const frameId = requestAnimationFrame(() => {
-      handleUserLocationUpdate(currentPosition);
+      handleUserCoordinateUpdate([currentPosition.coords.longitude, currentPosition.coords.latitude]);
     });
 
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [currentPosition, handleUserLocationUpdate]);
+  }, [currentPosition, handleUserCoordinateUpdate]);
 
   const handleRegionWillChange = useCallback((event: { nativeEvent?: { userInteraction?: boolean } }) => {
     // Only disable follow mode for direct user map interactions.
@@ -758,6 +798,7 @@ export default function Map() {
   return (
     <View style={styles.container}>
       <MapLibreMap
+        androidView='texture'
         attribution={false}
         compass={false}
         logo={false}
