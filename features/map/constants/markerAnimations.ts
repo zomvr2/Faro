@@ -1,0 +1,2 @@
+export const MARKER_ENTER_ANIMATION_MS = 220;
+export const MARKER_EXIT_ANIMATION_MS = 180;

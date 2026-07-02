@@ -1,4 +1,5 @@
 import { Marker } from "@maplibre/maplibre-react-native";
+import { AnimatedMarkerContent } from "@/features/map/components/AnimatedMarkerContent";
 import { CircleAlertIcon, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -6,6 +7,7 @@ import type { ReportDocument } from "@/services/appwrite";
 
 type ReportMarkerProps = {
   isPossiblyFalse: boolean;
+  isVisible: boolean;
   markerStyle: {
     label: string;
     color: string;
@@ -17,6 +19,7 @@ type ReportMarkerProps = {
 
 export function ReportMarker({
   isPossiblyFalse,
+  isVisible,
   markerStyle,
   onPress,
   report,
@@ -26,9 +29,13 @@ export function ReportMarker({
       id={report.$id}
       lngLat={[report.lng, report.lat]}
       anchor="bottom"
-      onPress={() => onPress(report)}
+      onPress={() => {
+        if (isVisible) {
+          onPress(report);
+        }
+      }}
     >
-      <View collapsable={false} style={styles.markerContainer}>
+      <AnimatedMarkerContent isVisible={isVisible} style={styles.markerContainer}>
         <View style={[styles.markerIconCircle, { backgroundColor: markerStyle.color }]}>
           <markerStyle.Icon size={14} color="#06121E" strokeWidth={2.4} />
         </View>
@@ -49,7 +56,7 @@ export function ReportMarker({
         </View>
 
         <View style={styles.markerTip} />
-      </View>
+      </AnimatedMarkerContent>
     </Marker>
   );
 }

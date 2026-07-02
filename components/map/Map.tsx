@@ -15,6 +15,7 @@ import {
 import { useMapReports } from '@/features/map/hooks/useMapReports';
 import { useReportFocusParams } from '@/features/map/hooks/useReportFocusParams';
 import { useMapCameraController } from '@/features/map/hooks/useMapCameraController';
+import { useMarkerPresence } from '@/features/map/hooks/useMarkerPresence';
 import {
     getReportMarkerStyle,
     getReportStatusStyle,
@@ -52,6 +53,8 @@ import {
 } from './serviceArea';
 
 const OVERVIEW_COORDINATE: GeoJSON.Position = SERVICE_AREA_CENTER;
+const EMPTY_REPORT_MARKERS: readonly ReportDocument[] = [];
+const EMPTY_ZONE_MARKERS: readonly ReportZoneCounter[] = [];
 
 export default function Map() {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
@@ -86,6 +89,12 @@ export default function Map() {
   ), [reports]);
   const shouldShowReportMarkers = currentZoom >= REPORT_MARKERS_MIN_ZOOM_LEVEL;
   const reportZoneCounters = useMemo(() => getReportZoneCounters(visibleReports), [visibleReports]);
+  const reportMarkerItems = shouldShowReportMarkers ? visibleReports : EMPTY_REPORT_MARKERS;
+  const zoneMarkerItems = shouldShowReportMarkers ? EMPTY_ZONE_MARKERS : reportZoneCounters;
+  const getReportPresenceKey = useCallback((report: ReportDocument) => report.$id, []);
+  const getZonePresenceKey = useCallback((zoneCounter: ReportZoneCounter) => zoneCounter.id, []);
+  const presentReportMarkers = useMarkerPresence(reportMarkerItems, getReportPresenceKey);
+  const presentZoneMarkers = useMarkerPresence(zoneMarkerItems, getZonePresenceKey);
 
   const closeReportModal = useCallback(() => {
     bottomSheetRef.current?.dismiss();
@@ -183,25 +192,29 @@ export default function Map() {
 
         {userCoordinate ? <UserLocationPuckLayer coordinate={userCoordinate} /> : null}
 
-        {shouldShowReportMarkers ? visibleReports.map((report) => {
+        {presentZoneMarkers.map(({ isVisible, item: zoneCounter, key }) => (
+          <ReportZoneMarker
+            key={key}
+            zoneCounter={zoneCounter}
+            isVisible={isVisible}
+            onPress={focusReportZone}
+          />
+        ))}
+
+        {presentReportMarkers.map(({ isVisible, item: report, key }) => {
           const markerStyle = getReportMarkerStyle(report.category);
 
           return (
             <ReportMarker
-              key={report.$id}
+              key={key}
               report={report}
               markerStyle={markerStyle}
               isPossiblyFalse={isReportPossiblyFalse(report)}
+              isVisible={isVisible}
               onPress={openReportModal}
             />
           );
-        }) : reportZoneCounters.map((zoneCounter) => (
-          <ReportZoneMarker
-            key={zoneCounter.id}
-            zoneCounter={zoneCounter}
-            onPress={focusReportZone}
-          />
-        ))}
+        })}
       </MapLibreMap>
 
       <ReportDetailsSheet

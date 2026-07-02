@@ -1,27 +1,33 @@
 import { Marker } from "@maplibre/maplibre-react-native";
+import { AnimatedMarkerContent } from "@/features/map/components/AnimatedMarkerContent";
 import { CircleAlertIcon } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 
 import type { ReportZoneCounter } from "@/features/map/utils/reportZones";
 
 type ReportZoneMarkerProps = {
+  isVisible: boolean;
   onPress: (zoneCounter: ReportZoneCounter) => void;
   zoneCounter: ReportZoneCounter;
 };
 
-export function ReportZoneMarker({ onPress, zoneCounter }: ReportZoneMarkerProps) {
+export function ReportZoneMarker({ isVisible, onPress, zoneCounter }: ReportZoneMarkerProps) {
   return (
     <Marker
       id={zoneCounter.id}
       lngLat={zoneCounter.coordinate}
       anchor="center"
-      onPress={() => onPress(zoneCounter)}
+      onPress={() => {
+        if (isVisible) {
+          onPress(zoneCounter);
+        }
+      }}
     >
-      <View
+      <AnimatedMarkerContent
         accessibilityLabel={`${zoneCounter.count} ${zoneCounter.count === 1 ? "reporte" : "reportes"} en esta zona. Toca para acercar.`}
         accessibilityRole="button"
         accessible
-        collapsable={false}
+        isVisible={isVisible}
         style={styles.zoneCounterContainer}
       >
         <View style={styles.zoneCounterBubble}>
@@ -36,7 +42,7 @@ export function ReportZoneMarker({ onPress, zoneCounter }: ReportZoneMarkerProps
             {zoneCounter.count === 1 ? "REPORTE" : "REPORTES"}
           </Text>
         </View>
-      </View>
+      </AnimatedMarkerContent>
     </Marker>
   );
 }
