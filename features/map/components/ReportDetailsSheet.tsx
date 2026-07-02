@@ -18,13 +18,16 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type {
   ReportDocument,
   ReportRatingVote,
+  ReportStatusVote,
 } from "@/services/appwrite";
 import { formatReportDate } from "@/shared/reports/formatters";
 import {
   formatTruthfulnessScore,
+  getReportTimelineItems,
   getStatusDetail,
   getTruthfulnessLabel,
 } from "@/shared/reports/reportSelectors";
+import type { ReportTimelineKind } from "@/shared/reports/types";
 
 const BOTTOM_SHEET_SNAP_POINTS = ["80%"];
 
@@ -34,9 +37,22 @@ type ReportVisualStyle = {
   Icon: LucideIcon;
 };
 
+const TIMELINE_META: Record<ReportTimelineKind, {
+  color: string;
+  Icon: LucideIcon;
+}> = {
+  created: { color: "#A8C1DE", Icon: Calendar },
+  confirmed: { color: "#00B7FF", Icon: CheckIcon },
+  active: { color: "#F5C648", Icon: CircleAlertIcon },
+  solved: { color: "#57C777", Icon: CheckIcon },
+  false: { color: "#FF8B8B", Icon: XIcon },
+  reopened: { color: "#F5C648", Icon: CircleAlertIcon },
+};
+
 type ReportDetailsSheetProps = {
   distanceLabel: string;
   imageUrls: string[];
+  isStatusVoting: boolean;
   isPossiblyFalse: boolean;
   isVoting: boolean;
   locationLabel: string;
@@ -44,9 +60,11 @@ type ReportDetailsSheetProps = {
   onChange: (index: number) => void;
   onClose: () => void;
   onOpenGalleryAtIndex: (index: number) => void;
+  onStatusVote: (vote: ReportStatusVote) => void;
   onVote: (vote: ReportRatingVote) => void;
   rating: number;
   report: ReportDocument | null;
+  selectedStatusVote: ReportStatusVote | null;
   selectedVote: ReportRatingVote | null;
   sheetRef: RefObject<BottomSheetModal | null>;
   statusStyle: ReportVisualStyle | null;
@@ -55,6 +73,7 @@ type ReportDetailsSheetProps = {
 export function ReportDetailsSheet({
   distanceLabel,
   imageUrls,
+  isStatusVoting,
   isPossiblyFalse,
   isVoting,
   locationLabel,
@@ -62,13 +81,16 @@ export function ReportDetailsSheet({
   onChange,
   onClose,
   onOpenGalleryAtIndex,
+  onStatusVote,
   onVote,
   rating,
   report,
+  selectedStatusVote,
   selectedVote,
   sheetRef,
   statusStyle,
 }: ReportDetailsSheetProps) {
+  const timelineItems = report ? getReportTimelineItems(report) : [];
   const renderBottomSheetBackdrop = useCallback((props: any) => (
     <BottomSheetBackdrop
       {...props}
@@ -172,6 +194,34 @@ export function ReportDetailsSheet({
                   {" - "}
                   {getStatusDetail(report.status)}
                 </Text>
+
+                {report.status === "active" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Indicar que el reporte fue resuelto"
+                    accessibilityState={{ selected: selectedStatusVote === "solved" }}
+                    disabled={isStatusVoting || selectedStatusVote === "solved"}
+                    onPress={() => {
+                      onStatusVote("solved");
+                    }}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.statusInlineAction,
+                      selectedStatusVote === "solved" && styles.statusInlineActionSelected,
+                      isStatusVoting && styles.statusInlineActionDisabled,
+                      pressed && styles.statusInlineActionPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusInlineActionText,
+                        selectedStatusVote === "solved" && styles.statusInlineActionTextSelected,
+                      ]}
+                    >
+                      {selectedStatusVote === "solved" ? "Marcaste resuelto" : "Fue resuelto?"}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : null}
 
@@ -181,7 +231,7 @@ export function ReportDetailsSheet({
                 <View style={styles.truthWarningCopy}>
                   <Text style={styles.truthWarningTitle}>Posiblemente falso</Text>
                   <Text style={styles.truthWarningText}>
-                    Este reporte acumula varios votos negativos. Se mantiene visible como advertencia.
+                    Este reporte acumula varios votos negativos.
                   </Text>
                 </View>
               </View>
@@ -261,6 +311,47 @@ export function ReportDetailsSheet({
               <Text style={styles.descriptionText}>
                 {report.description?.trim() || "Sin descripcion"}
               </Text>
+            </View>
+
+            <View style={styles.timelineSection}>
+              <Text style={styles.descriptionTitle}>Seguimiento</Text>
+
+              <View style={styles.timelineList}>
+                {timelineItems.map((timelineItem, index) => {
+                  const timelineMeta = TIMELINE_META[timelineItem.type];
+                  const TimelineIcon = timelineMeta.Icon;
+                  const isLastItem = index === timelineItems.length - 1;
+
+                  return (
+                    <View key={timelineItem.id} style={styles.timelineRow}>
+                      <View style={styles.timelineRail}>
+                        <View
+                          style={[
+                            styles.timelineDot,
+                            {
+                              backgroundColor: `${timelineMeta.color}24`,
+                              borderColor: timelineMeta.color,
+                            },
+                          ]}
+                        >
+                          <TimelineIcon size={13} color={timelineMeta.color} strokeWidth={2.8} />
+                        </View>
+                        {!isLastItem ? <View style={styles.timelineLine} /> : null}
+                      </View>
+
+                      <View style={styles.timelineCard}>
+                        <View style={styles.timelineCardHeader}>
+                          <Text style={styles.timelineTitle}>{timelineItem.title}</Text>
+                          <Text style={styles.timelineDate} numberOfLines={1}>
+                            {formatReportDate(timelineItem.occurredAt)}
+                          </Text>
+                        </View>
+                        <Text style={styles.timelineText}>{timelineItem.description}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           </View>
         </BottomSheetScrollView>
@@ -415,6 +506,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  statusInlineAction: {
+    minHeight: 28,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusInlineActionSelected: {
+    backgroundColor: "rgba(87, 199, 119, 0.14)",
+  },
+  statusInlineActionDisabled: {
+    opacity: 0.72,
+  },
+  statusInlineActionPressed: {
+    opacity: 0.7,
+  },
+  statusInlineActionText: {
+    color: "#DFF7E9",
+    fontSize: 12,
+    fontWeight: "800",
+    textDecorationLine: "underline",
+  },
+  statusInlineActionTextSelected: {
+    color: "#A7DDB8",
+    textDecorationLine: "none",
+  },
   truthWarningBanner: {
     minHeight: 58,
     borderRadius: 12,
@@ -560,5 +677,75 @@ const styles = StyleSheet.create({
     color: "#CFCFCF",
     fontSize: 16,
     lineHeight: 23,
+  },
+  timelineSection: {
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.08)",
+    gap: 12,
+  },
+  timelineList: {
+    gap: 0,
+  },
+  timelineRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
+  },
+  timelineRail: {
+    width: 32,
+    alignItems: "center",
+  },
+  timelineDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timelineLine: {
+    flex: 1,
+    width: 1,
+    minHeight: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+  },
+  timelineCard: {
+    flex: 1,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "#1B1B1B",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  timelineCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  timelineTitle: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  timelineDate: {
+    maxWidth: 112,
+    color: "#9D9D9D",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  timelineText: {
+    color: "#C7C7C7",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
   },
 });

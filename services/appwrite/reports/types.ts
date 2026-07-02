@@ -8,10 +8,11 @@ import type {
   ReportCategory,
   ReportRatingVote,
   ReportStatus,
+  ReportStatusVote,
 } from "@/shared/reports/types";
 
 export { REPORT_CATEGORIES, REPORT_STATUSES };
-export type { ReportCategory, ReportRatingVote, ReportStatus };
+export type { ReportCategory, ReportRatingVote, ReportStatus, ReportStatusVote };
 
 export type ReportData = {
   title: string;
@@ -35,6 +36,10 @@ export type ReportDocument = Models.Document & {
   images: string | null;
   rating: number | null;
   locationLabel?: string | null;
+  activeVotes?: number | null;
+  solvedVotes?: number | null;
+  falseVotes?: number | null;
+  statusTimeline?: string | null;
 };
 
 export type UploadMediaInput = {

@@ -3,12 +3,16 @@ import { Alert } from "react-native";
 
 import {
   getReportRatingVoteDelta,
+  getOptimisticReportStatusVoteUpdate,
   getStoredReportRatingVote,
+  getStoredReportStatusVote,
   listLatestReports,
   subscribeToReports,
   voteReportRating,
+  voteReportStatus,
   type ReportDocument,
   type ReportRatingVote,
+  type ReportStatusVote,
 } from "@/services/appwrite";
 import { getReportRating } from "@/shared/reports/reportSelectors";
 
@@ -16,7 +20,9 @@ export function useMapReports() {
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportDocument | null>(null);
   const [selectedReportRatingVote, setSelectedReportRatingVote] = useState<ReportRatingVote | null>(null);
+  const [selectedReportStatusVote, setSelectedReportStatusVote] = useState<ReportStatusVote | null>(null);
   const [pendingVoteReportId, setPendingVoteReportId] = useState<string | null>(null);
+  const [pendingStatusVoteReportId, setPendingStatusVoteReportId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadReports = async () => {
@@ -79,6 +85,29 @@ export function useMapReports() {
     };
   }, [selectedReport?.$id]);
 
+  useEffect(() => {
+    let shouldIgnoreVote = false;
+
+    if (!selectedReport) {
+      setSelectedReportStatusVote(null);
+      return;
+    }
+
+    const loadSelectedReportStatusVote = async () => {
+      const storedVote = await getStoredReportStatusVote(selectedReport.$id);
+
+      if (!shouldIgnoreVote) {
+        setSelectedReportStatusVote(storedVote);
+      }
+    };
+
+    void loadSelectedReportStatusVote();
+
+    return () => {
+      shouldIgnoreVote = true;
+    };
+  }, [selectedReport?.$id]);
+
   const voteSelectedReport = useCallback(async (vote: ReportRatingVote) => {
     if (!selectedReport || pendingVoteReportId) {
       return;
@@ -134,12 +163,76 @@ export function useMapReports() {
     }
   }, [pendingVoteReportId, selectedReport]);
 
+  const voteSelectedReportStatus = useCallback(async (vote: ReportStatusVote) => {
+    if (!selectedReport || pendingStatusVoteReportId) {
+      return;
+    }
+
+    const reportId = selectedReport.$id;
+    const previousReport = selectedReport;
+
+    setPendingStatusVoteReportId(reportId);
+
+    try {
+      const previousVote = await getStoredReportStatusVote(reportId);
+
+      if (previousVote === vote) {
+        return;
+      }
+
+      const optimisticStatusUpdate = getOptimisticReportStatusVoteUpdate(
+        selectedReport,
+        previousVote,
+        vote
+      );
+      const optimisticReport = {
+        ...selectedReport,
+        ...optimisticStatusUpdate,
+      };
+
+      setSelectedReportStatusVote(vote);
+      setSelectedReport(optimisticReport);
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? optimisticReport : report))
+      );
+
+      const updatedReport = await voteReportStatus(reportId, vote);
+
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? updatedReport : report))
+      );
+      setSelectedReport((currentReport) =>
+        currentReport?.$id === reportId ? updatedReport : currentReport
+      );
+    } catch (error) {
+      setSelectedReportStatusVote(await getStoredReportStatusVote(reportId));
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? previousReport : report))
+      );
+      setSelectedReport((currentReport) =>
+        currentReport?.$id === reportId ? previousReport : currentReport
+      );
+
+      Alert.alert(
+        "No se pudo actualizar el estado",
+        error instanceof Error ? error.message : "Intentalo nuevamente en unos segundos."
+      );
+    } finally {
+      setPendingStatusVoteReportId((currentReportId) => (
+        currentReportId === reportId ? null : currentReportId
+      ));
+    }
+  }, [pendingStatusVoteReportId, selectedReport]);
+
   return {
+    isSelectedReportStatusVoting: selectedReport ? pendingStatusVoteReportId === selectedReport.$id : false,
     isSelectedReportVoting: selectedReport ? pendingVoteReportId === selectedReport.$id : false,
     reports,
     selectedReport,
     selectedReportRatingVote,
+    selectedReportStatusVote,
     selectReport,
     voteSelectedReport,
+    voteSelectedReportStatus,
   };
 }

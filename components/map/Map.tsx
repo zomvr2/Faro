@@ -74,12 +74,15 @@ export default function Map() {
     userCoordinate,
   } = useMapCameraController();
   const {
+    isSelectedReportStatusVoting,
     isSelectedReportVoting,
     reports,
     selectedReport,
     selectedReportRatingVote,
+    selectedReportStatusVote,
     selectReport,
     voteSelectedReport,
+    voteSelectedReportStatus,
   } = useMapReports();
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -229,10 +232,15 @@ export default function Map() {
         rating={selectedReportRating}
         isPossiblyFalse={selectedReportIsPossiblyFalse}
         isVoting={isSelectedReportVoting}
+        isStatusVoting={isSelectedReportStatusVoting}
         selectedVote={selectedReportRatingVote}
+        selectedStatusVote={selectedReportStatusVote}
         onChange={handleBottomSheetChange}
         onClose={closeReportModal}
         onOpenGalleryAtIndex={openGalleryAtIndex}
+        onStatusVote={(vote) => {
+          void voteSelectedReportStatus(vote);
+        }}
         onVote={(vote) => {
           void voteSelectedReport(vote);
         }}
