@@ -16,6 +16,7 @@ import {
 } from "@/shared/geo/serviceArea";
 
 export const MAX_REPORT_IMAGES = 3;
+const DEFAULT_REPORT_CATEGORY: ReportCategory = "security";
 
 export type SelectedMedia = {
   uri: string;
@@ -25,7 +26,7 @@ export type SelectedMedia = {
 };
 
 export function useCreateReportForm() {
-  const [selectedCategory, setSelectedCategory] = useState<ReportCategory>("infrastructure");
+  const [selectedCategory, setSelectedCategory] = useState<ReportCategory>(DEFAULT_REPORT_CATEGORY);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia[]>([]);
@@ -40,7 +41,7 @@ export function useCreateReportForm() {
   const resetForm = useCallback(() => {
     setTitle("");
     setDescription("");
-    setSelectedCategory("infrastructure");
+    setSelectedCategory(DEFAULT_REPORT_CATEGORY);
     setSelectedMedia([]);
     setUploadProgressByUri({});
     setSubmitError(null);
