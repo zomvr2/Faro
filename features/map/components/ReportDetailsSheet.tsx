@@ -47,6 +47,7 @@ type ReportDetailsSheetProps = {
   onVote: (vote: ReportRatingVote) => void;
   rating: number;
   report: ReportDocument | null;
+  selectedVote: ReportRatingVote | null;
   sheetRef: RefObject<BottomSheetModal | null>;
   statusStyle: ReportVisualStyle | null;
 };
@@ -64,6 +65,7 @@ export function ReportDetailsSheet({
   onVote,
   rating,
   report,
+  selectedVote,
   sheetRef,
   statusStyle,
 }: ReportDetailsSheetProps) {
@@ -216,6 +218,7 @@ export function ReportDetailsSheet({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Marcar reporte como veridico"
+                accessibilityState={{ selected: selectedVote === "truthful" }}
                 disabled={isVoting}
                 onPress={() => {
                   onVote("truthful");
@@ -223,6 +226,7 @@ export function ReportDetailsSheet({
                 style={({ pressed }) => [
                   styles.voteButton,
                   styles.truthVoteButton,
+                  selectedVote === "truthful" && styles.truthVoteButtonSelected,
                   isVoting && styles.voteButtonDisabled,
                   pressed && styles.voteButtonPressed,
                 ]}
@@ -234,6 +238,7 @@ export function ReportDetailsSheet({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Marcar reporte como falso"
+                accessibilityState={{ selected: selectedVote === "false" }}
                 disabled={isVoting}
                 onPress={() => {
                   onVote("false");
@@ -241,6 +246,7 @@ export function ReportDetailsSheet({
                 style={({ pressed }) => [
                   styles.voteButton,
                   styles.falseVoteButton,
+                  selectedVote === "false" && styles.falseVoteButtonSelected,
                   isVoting && styles.voteButtonDisabled,
                   pressed && styles.voteButtonPressed,
                 ]}
@@ -511,9 +517,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4F4F4",
     borderColor: "rgba(255, 255, 255, 0.72)",
   },
+  truthVoteButtonSelected: {
+    borderColor: "#31C96B",
+    borderWidth: 2.5,
+  },
   falseVoteButton: {
     backgroundColor: "#2E2E2E",
     borderColor: "rgba(255, 255, 255, 0.12)",
+  },
+  falseVoteButtonSelected: {
+    borderColor: "#FF8B8B",
+    borderWidth: 2.5,
   },
   voteButtonPressed: {
     opacity: 0.76,

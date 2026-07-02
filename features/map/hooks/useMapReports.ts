@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
 
 import {
+  getReportRatingVoteDelta,
+  getStoredReportRatingVote,
   listLatestReports,
   subscribeToReports,
   voteReportRating,
@@ -13,6 +15,7 @@ import { getReportRating } from "@/shared/reports/reportSelectors";
 export function useMapReports() {
   const [reports, setReports] = useState<ReportDocument[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportDocument | null>(null);
+  const [selectedReportRatingVote, setSelectedReportRatingVote] = useState<ReportRatingVote | null>(null);
   const [pendingVoteReportId, setPendingVoteReportId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +56,29 @@ export function useMapReports() {
     setSelectedReport(report);
   }, []);
 
+  useEffect(() => {
+    let shouldIgnoreVote = false;
+
+    if (!selectedReport) {
+      setSelectedReportRatingVote(null);
+      return;
+    }
+
+    const loadSelectedReportRatingVote = async () => {
+      const storedVote = await getStoredReportRatingVote(selectedReport.$id);
+
+      if (!shouldIgnoreVote) {
+        setSelectedReportRatingVote(storedVote);
+      }
+    };
+
+    void loadSelectedReportRatingVote();
+
+    return () => {
+      shouldIgnoreVote = true;
+    };
+  }, [selectedReport?.$id]);
+
   const voteSelectedReport = useCallback(async (vote: ReportRatingVote) => {
     if (!selectedReport || pendingVoteReportId) {
       return;
@@ -60,19 +86,28 @@ export function useMapReports() {
 
     const reportId = selectedReport.$id;
     const previousReport = selectedReport;
-    const voteDelta = vote === "truthful" ? 1 : -1;
-    const optimisticReport = {
-      ...selectedReport,
-      rating: getReportRating(selectedReport) + voteDelta,
-    };
 
     setPendingVoteReportId(reportId);
-    setSelectedReport(optimisticReport);
-    setReports((currentReports) =>
-      currentReports.map((report) => (report.$id === reportId ? optimisticReport : report))
-    );
 
     try {
+      const previousVote = await getStoredReportRatingVote(reportId);
+      const voteDelta = getReportRatingVoteDelta(previousVote, vote);
+
+      if (voteDelta === 0) {
+        return;
+      }
+
+      const optimisticReport = {
+        ...selectedReport,
+        rating: getReportRating(selectedReport) + voteDelta,
+      };
+
+      setSelectedReportRatingVote(vote);
+      setSelectedReport(optimisticReport);
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? optimisticReport : report))
+      );
+
       const updatedReport = await voteReportRating(reportId, vote);
 
       setReports((currentReports) =>
@@ -82,6 +117,7 @@ export function useMapReports() {
         currentReport?.$id === reportId ? updatedReport : currentReport
       );
     } catch (error) {
+      setSelectedReportRatingVote(await getStoredReportRatingVote(reportId));
       setReports((currentReports) =>
         currentReports.map((report) => (report.$id === reportId ? previousReport : report))
       );
@@ -102,6 +138,7 @@ export function useMapReports() {
     isSelectedReportVoting: selectedReport ? pendingVoteReportId === selectedReport.$id : false,
     reports,
     selectedReport,
+    selectedReportRatingVote,
     selectReport,
     voteSelectedReport,
   };

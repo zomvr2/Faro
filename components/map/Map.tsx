@@ -77,6 +77,7 @@ export default function Map() {
     isSelectedReportVoting,
     reports,
     selectedReport,
+    selectedReportRatingVote,
     selectReport,
     voteSelectedReport,
   } = useMapReports();
@@ -228,6 +229,7 @@ export default function Map() {
         rating={selectedReportRating}
         isPossiblyFalse={selectedReportIsPossiblyFalse}
         isVoting={isSelectedReportVoting}
+        selectedVote={selectedReportRatingVote}
         onChange={handleBottomSheetChange}
         onClose={closeReportModal}
         onOpenGalleryAtIndex={openGalleryAtIndex}

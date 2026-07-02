@@ -1,18 +1,22 @@
 import { getAppwriteDatabases } from "@/services/appwrite/client";
 import { getAppwriteEnv } from "@/services/appwrite/env";
+import {
+  getReportRatingVoteDelta,
+  getStoredReportRatingVote,
+  setStoredReportRatingVote,
+} from "@/services/appwrite/reports/deviceRatingVotes";
 import { normalizeReportRating } from "@/services/appwrite/reports/serializers";
 import type {
   ReportDocument,
   ReportRatingVote,
 } from "@/services/appwrite/reports/types";
 
-export async function voteReportRating(
+async function updateReportRatingByDelta(
   reportId: string,
-  vote: ReportRatingVote
+  voteDelta: number
 ): Promise<ReportDocument> {
   const env = getAppwriteEnv();
   const databases = getAppwriteDatabases();
-  const voteDelta = vote === "truthful" ? 1 : -1;
 
   try {
     if (voteDelta > 0) {
@@ -21,7 +25,7 @@ export async function voteReportRating(
         env.reportsCollectionId,
         reportId,
         "rating",
-        1
+        voteDelta
       );
     }
 
@@ -30,7 +34,7 @@ export async function voteReportRating(
       env.reportsCollectionId,
       reportId,
       "rating",
-      1
+      Math.abs(voteDelta)
     );
   } catch {
     const report = await databases.getDocument<ReportDocument>(
@@ -47,5 +51,32 @@ export async function voteReportRating(
         rating: normalizeReportRating(report.rating) + voteDelta,
       }
     );
+  }
+}
+
+export async function voteReportRating(
+  reportId: string,
+  vote: ReportRatingVote
+): Promise<ReportDocument> {
+  const env = getAppwriteEnv();
+  const databases = getAppwriteDatabases();
+  const previousVote = await getStoredReportRatingVote(reportId);
+  const voteDelta = getReportRatingVoteDelta(previousVote, vote);
+
+  if (voteDelta === 0) {
+    return databases.getDocument<ReportDocument>(
+      env.databaseId,
+      env.reportsCollectionId,
+      reportId
+    );
+  }
+
+  await setStoredReportRatingVote(reportId, vote);
+
+  try {
+    return await updateReportRatingByDelta(reportId, voteDelta);
+  } catch (error) {
+    await setStoredReportRatingVote(reportId, previousVote);
+    throw error;
   }
 }
