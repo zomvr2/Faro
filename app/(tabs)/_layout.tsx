@@ -4,7 +4,7 @@ import { AddReportSheet } from "@/features/reports/components/AddReportSheet";
 import { useCreateReportForm } from "@/features/reports/hooks/useCreateReportForm";
 import { useNearbyReportNotifications } from "@/features/reports/hooks/useNearbyReportNotifications";
 import { BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { Tabs, useSegments } from "expo-router";
+import { Tabs, useRouter, useSegments } from "expo-router";
 import { LocateFixedIcon, MapIcon, PlusIcon, RssIcon } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -26,11 +26,13 @@ export default function TabLayout() {
 }
 
 function TabsContent() {
+  const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
   const addSheetRef = useRef<BottomSheetModal>(null);
   const createReportForm = useCreateReportForm();
   const { clearSubmitError } = createReportForm;
+  const [shouldOpenAddSheetOnMap, setShouldOpenAddSheetOnMap] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { hasNearbyReports, markReportNotified } = useNearbyReportNotifications();
@@ -58,10 +60,33 @@ function TabsContent() {
     }, 2000);
   }, []);
 
+  useEffect(() => {
+    if (!shouldOpenAddSheetOnMap || !isMapTabActive) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      addSheetRef.current?.present();
+      setShouldOpenAddSheetOnMap(false);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [isMapTabActive, shouldOpenAddSheetOnMap]);
+
   const openAddSheet = useCallback(() => {
     clearSubmitError();
-    addSheetRef.current?.present();
-  }, [clearSubmitError]);
+    setShouldOpenAddSheetOnMap(true);
+
+    if (isMapTabActive) {
+      addSheetRef.current?.present();
+      setShouldOpenAddSheetOnMap(false);
+      return;
+    }
+
+    router.navigate("/");
+  }, [clearSubmitError, isMapTabActive, router]);
 
   const closeAddSheet = useCallback(() => {
     addSheetRef.current?.dismiss();
