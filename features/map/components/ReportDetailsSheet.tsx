@@ -9,6 +9,8 @@ import {
   CircleAlertIcon,
   ImageIcon,
   MapPin,
+  PencilIcon,
+  Trash2Icon,
   XIcon,
   type LucideIcon,
 } from "lucide-react-native";
@@ -52,13 +54,18 @@ const TIMELINE_META: Record<ReportTimelineKind, {
 type ReportDetailsSheetProps = {
   distanceLabel: string;
   imageUrls: string[];
+  isDeletingOwnReport: boolean;
   isStatusVoting: boolean;
+  isOwnReport: boolean;
   isPossiblyFalse: boolean;
+  isUpdatingOwnReport: boolean;
   isVoting: boolean;
   locationLabel: string;
   markerStyle: ReportVisualStyle | null;
   onChange: (index: number) => void;
   onClose: () => void;
+  onDeleteOwnReport: () => void;
+  onEditOwnReport: () => void;
   onOpenGalleryAtIndex: (index: number) => void;
   onStatusVote: (vote: ReportStatusVote) => void;
   onVote: (vote: ReportRatingVote) => void;
@@ -73,13 +80,18 @@ type ReportDetailsSheetProps = {
 export function ReportDetailsSheet({
   distanceLabel,
   imageUrls,
+  isDeletingOwnReport,
   isStatusVoting,
+  isOwnReport,
   isPossiblyFalse,
+  isUpdatingOwnReport,
   isVoting,
   locationLabel,
   markerStyle,
   onChange,
   onClose,
+  onDeleteOwnReport,
+  onEditOwnReport,
   onOpenGalleryAtIndex,
   onStatusVote,
   onVote,
@@ -91,6 +103,8 @@ export function ReportDetailsSheet({
   statusStyle,
 }: ReportDetailsSheetProps) {
   const timelineItems = report ? getReportTimelineItems(report) : [];
+  const isOwnerActionPending = isDeletingOwnReport || isUpdatingOwnReport;
+
   const renderBottomSheetBackdrop = useCallback((props: any) => (
     <BottomSheetBackdrop
       {...props}
@@ -353,6 +367,46 @@ export function ReportDetailsSheet({
                 })}
               </View>
             </View>
+
+            {isOwnReport ? (
+              <View style={styles.ownerActionsSection}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar reporte"
+                  disabled={isOwnerActionPending}
+                  onPress={onEditOwnReport}
+                  style={({ pressed }) => [
+                    styles.ownerActionButton,
+                    styles.editReportButton,
+                    pressed && styles.ownerActionButtonPressed,
+                    isOwnerActionPending && styles.ownerActionButtonDisabled,
+                  ]}
+                >
+                  <PencilIcon size={16} color="#111111" strokeWidth={2.8} />
+                  <Text style={[styles.ownerActionButtonText, styles.editReportButtonText]}>
+                    Editar
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Eliminar reporte"
+                  disabled={isOwnerActionPending}
+                  onPress={onDeleteOwnReport}
+                  style={({ pressed }) => [
+                    styles.ownerActionButton,
+                    styles.deleteReportButton,
+                    pressed && styles.ownerActionButtonPressed,
+                    isOwnerActionPending && styles.ownerActionButtonDisabled,
+                  ]}
+                >
+                  <Trash2Icon size={16} color="#FF8B8B" strokeWidth={2.8} />
+                  <Text style={[styles.ownerActionButtonText, styles.deleteReportButtonText]}>
+                    {isDeletingOwnReport ? "Eliminando..." : "Eliminar"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </BottomSheetScrollView>
       ) : null}
@@ -747,5 +801,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
+  },
+  ownerActionsSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 2,
+  },
+  ownerActionButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+  },
+  editReportButton: {
+    backgroundColor: "#F4F4F4",
+    borderColor: "rgba(255, 255, 255, 0.72)",
+  },
+  deleteReportButton: {
+    backgroundColor: "#2A1B1B",
+    borderColor: "rgba(255, 139, 139, 0.38)",
+  },
+  ownerActionButtonPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.99 }],
+  },
+  ownerActionButtonDisabled: {
+    opacity: 0.62,
+  },
+  ownerActionButtonText: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  editReportButtonText: {
+    color: "#111111",
+  },
+  deleteReportButtonText: {
+    color: "#FFB4B4",
   },
 });

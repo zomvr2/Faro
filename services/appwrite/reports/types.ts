@@ -20,11 +20,14 @@ export type ReportData = {
   description: string;
   lng: number;
   lat: number;
+  deviceAccountId?: string | null;
   status?: ReportStatus;
   imageUrls?: string[];
   images?: string;
   locationLabel?: string | null;
 };
+
+export type ReportUpdateData = Partial<Pick<ReportData, "category" | "description" | "title">>;
 
 export type ReportDocument = Models.Document & {
   title: string;
@@ -35,6 +38,7 @@ export type ReportDocument = Models.Document & {
   status: ReportStatus;
   images: string | null;
   rating: number | null;
+  deviceAccountId?: string | null;
   locationLabel?: string | null;
   activeVotes?: number | null;
   solvedVotes?: number | null;

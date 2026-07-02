@@ -8,6 +8,7 @@ import { IntroLogoOverlay } from '@/features/map/components/IntroLogoOverlay';
 import { ReportGalleryModal } from '@/features/map/components/ReportGalleryModal';
 import { ReportDetailsSheet } from '@/features/map/components/ReportDetailsSheet';
 import { UserLocationPuckLayer } from '@/features/map/components/UserLocationPuckLayer';
+import { EditReportSheet } from '@/features/reports/components/EditReportSheet';
 import {
     getReportZoneCounters,
     type ReportZoneCounter,
@@ -39,7 +40,7 @@ import {
     Camera,
     Map as MapLibreMap,
 } from '@maplibre/maplibre-react-native';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     StyleSheet,
     View,
@@ -58,6 +59,9 @@ const EMPTY_ZONE_MARKERS: readonly ReportZoneCounter[] = [];
 
 export default function Map() {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const editReportSheetRef = useRef<BottomSheetModal>(null);
+  const isEditReportSheetPresentedRef = useRef(false);
+  const shouldPresentEditReportSheetRef = useRef(false);
   const {
     cameraRef,
     currentZoom,
@@ -74,18 +78,25 @@ export default function Map() {
     userCoordinate,
   } = useMapCameraController();
   const {
+    deleteSelectedOwnReport,
     isSelectedReportStatusVoting,
+    isSelectedReportDeleting,
+    isSelectedReportUpdating,
     isSelectedReportVoting,
     reports,
     selectedReport,
+    selectedReportIsOwnReport,
     selectedReportRatingVote,
     selectedReportStatusVote,
     selectReport,
+    updateSelectedOwnReport,
     voteSelectedReport,
     voteSelectedReportStatus,
   } = useMapReports();
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [editingReport, setEditingReport] = useState<ReportDocument | null>(null);
+  const [editReportOpenRequest, setEditReportOpenRequest] = useState(0);
   const visibleReports = useMemo(() => reports.filter((report) =>
     Number.isFinite(report.lat) &&
     Number.isFinite(report.lng) &&
@@ -100,8 +111,33 @@ export default function Map() {
   const presentReportMarkers = useMarkerPresence(reportMarkerItems, getReportPresenceKey);
   const presentZoneMarkers = useMarkerPresence(zoneMarkerItems, getZonePresenceKey);
 
+  useEffect(() => {
+    if (!editingReport || !shouldPresentEditReportSheetRef.current) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      editReportSheetRef.current?.present();
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [editReportOpenRequest, editingReport]);
+
   const closeReportModal = useCallback(() => {
+    isEditReportSheetPresentedRef.current = false;
+    shouldPresentEditReportSheetRef.current = false;
+    setEditingReport(null);
+    editReportSheetRef.current?.dismiss();
     bottomSheetRef.current?.dismiss();
+  }, []);
+
+  const closeEditReportSheet = useCallback(() => {
+    isEditReportSheetPresentedRef.current = false;
+    shouldPresentEditReportSheetRef.current = false;
+    setEditingReport(null);
+    editReportSheetRef.current?.dismiss();
   }, []);
 
   const openReportModal = useCallback((report: ReportDocument) => {
@@ -110,6 +146,23 @@ export default function Map() {
       bottomSheetRef.current?.present();
     });
   }, [selectReport]);
+
+  const openEditReportSheet = useCallback(() => {
+    if (!selectedReport || !selectedReportIsOwnReport) {
+      return;
+    }
+
+    isEditReportSheetPresentedRef.current = true;
+    shouldPresentEditReportSheetRef.current = true;
+    setEditingReport(selectedReport);
+    setEditReportOpenRequest((requestCount) => requestCount + 1);
+  }, [selectedReport, selectedReportIsOwnReport]);
+
+  const handleEditReportDismiss = useCallback(() => {
+    isEditReportSheetPresentedRef.current = false;
+    shouldPresentEditReportSheetRef.current = false;
+    setEditingReport(null);
+  }, []);
 
   const focusReportZone = useCallback((zoneCounter: ReportZoneCounter) => {
     flyToCoordinate(zoneCounter.coordinate, {
@@ -133,6 +186,10 @@ export default function Map() {
 
   const handleBottomSheetChange = useCallback((index: number) => {
     if (index === -1) {
+      if (isEditReportSheetPresentedRef.current) {
+        return;
+      }
+
       selectReport(null);
       setIsGalleryVisible(false);
       setSelectedImageIndex(0);
@@ -231,6 +288,9 @@ export default function Map() {
         locationLabel={selectedReportLocationLabel}
         rating={selectedReportRating}
         isPossiblyFalse={selectedReportIsPossiblyFalse}
+        isOwnReport={selectedReportIsOwnReport}
+        isDeletingOwnReport={isSelectedReportDeleting}
+        isUpdatingOwnReport={isSelectedReportUpdating}
         isVoting={isSelectedReportVoting}
         isStatusVoting={isSelectedReportStatusVoting}
         selectedVote={selectedReportRatingVote}
@@ -238,6 +298,10 @@ export default function Map() {
         onChange={handleBottomSheetChange}
         onClose={closeReportModal}
         onOpenGalleryAtIndex={openGalleryAtIndex}
+        onEditOwnReport={openEditReportSheet}
+        onDeleteOwnReport={() => {
+          deleteSelectedOwnReport(closeReportModal);
+        }}
         onStatusVote={(vote) => {
           void voteSelectedReportStatus(vote);
         }}
@@ -251,6 +315,15 @@ export default function Map() {
         selectedIndex={selectedImageIndex}
         onClose={closeGallery}
         onSelectedIndexChange={setSelectedImageIndex}
+      />
+
+      <EditReportSheet
+        sheetRef={editReportSheetRef}
+        report={editingReport}
+        isSubmitting={isSelectedReportUpdating}
+        onClose={closeEditReportSheet}
+        onDismiss={handleEditReportDismiss}
+        onSubmit={updateSelectedOwnReport}
       />
 
       {showIntroLogo ? <IntroLogoOverlay opacity={introLogoOpacity} /> : null}

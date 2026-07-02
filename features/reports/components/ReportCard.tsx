@@ -139,7 +139,10 @@ export function ReportCard({ report, onPress }: ReportCardProps) {
         <View style={styles.cardMetaRow}>
           <View style={[styles.statusPill, { borderColor: `${statusMeta.color}70` }]}>
             <statusMeta.Icon size={12} color={statusMeta.color} />
-            <Text style={[styles.statusPillText, { color: statusMeta.color }]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.statusPillText, { color: statusMeta.color }]}
+            >
               {statusMeta.label}
             </Text>
           </View>
@@ -311,10 +314,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 9,
     paddingVertical: 5,
+    flexShrink: 1,
+    minWidth: 0,
   },
   statusPillText: {
     fontSize: 11,
     fontWeight: "900",
+    flexShrink: 1,
   },
   cardMetaRight: {
     flex: 1,

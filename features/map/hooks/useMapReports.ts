@@ -1,19 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert } from "react-native";
 
 import {
+  deleteReportDocument,
   getReportRatingVoteDelta,
   getOptimisticReportStatusVoteUpdate,
   getStoredReportRatingVote,
   getStoredReportStatusVote,
   listLatestReports,
   subscribeToReports,
+  updateReportDocument,
   voteReportRating,
   voteReportStatus,
   type ReportDocument,
   type ReportRatingVote,
   type ReportStatusVote,
+  type ReportUpdateData,
 } from "@/services/appwrite";
+import {
+  getLocalDeviceAccountId,
+  isReportOwnedByLocalAccount,
+} from "@/services/device";
 import { getReportRating } from "@/shared/reports/reportSelectors";
 
 export function useMapReports() {
@@ -23,6 +30,31 @@ export function useMapReports() {
   const [selectedReportStatusVote, setSelectedReportStatusVote] = useState<ReportStatusVote | null>(null);
   const [pendingVoteReportId, setPendingVoteReportId] = useState<string | null>(null);
   const [pendingStatusVoteReportId, setPendingStatusVoteReportId] = useState<string | null>(null);
+  const [pendingDeleteReportId, setPendingDeleteReportId] = useState<string | null>(null);
+  const [pendingUpdateReportId, setPendingUpdateReportId] = useState<string | null>(null);
+  const [localDeviceAccountId, setLocalDeviceAccountId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let shouldIgnoreAccount = false;
+
+    const loadLocalDeviceAccount = async () => {
+      try {
+        const accountId = await getLocalDeviceAccountId();
+
+        if (!shouldIgnoreAccount) {
+          setLocalDeviceAccountId(accountId);
+        }
+      } catch {
+        // The map remains usable even if the local account cannot be read.
+      }
+    };
+
+    void loadLocalDeviceAccount();
+
+    return () => {
+      shouldIgnoreAccount = true;
+    };
+  }, []);
 
   useEffect(() => {
     const loadReports = async () => {
@@ -224,14 +256,114 @@ export function useMapReports() {
     }
   }, [pendingStatusVoteReportId, selectedReport]);
 
+  const selectedReportIsOwnReport = useMemo(
+    () => isReportOwnedByLocalAccount(selectedReport, localDeviceAccountId),
+    [localDeviceAccountId, selectedReport]
+  );
+
+  const deleteSelectedOwnReport = useCallback((onDeleted?: () => void) => {
+    if (!selectedReport || pendingDeleteReportId) {
+      return;
+    }
+
+    if (!isReportOwnedByLocalAccount(selectedReport, localDeviceAccountId)) {
+      Alert.alert("Accion no disponible", "Solo puedes eliminar reportes creados desde este dispositivo.");
+      return;
+    }
+
+    const reportId = selectedReport.$id;
+
+    Alert.alert(
+      "Eliminar reporte",
+      "Esta accion quitara el reporte del mapa y del feed.",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            setPendingDeleteReportId(reportId);
+
+            void (async () => {
+              try {
+                await deleteReportDocument(reportId);
+                setReports((currentReports) =>
+                  currentReports.filter((report) => report.$id !== reportId)
+                );
+                setSelectedReport((currentReport) =>
+                  currentReport?.$id === reportId ? null : currentReport
+                );
+                onDeleted?.();
+              } catch (error) {
+                Alert.alert(
+                  "No se pudo eliminar",
+                  error instanceof Error ? error.message : "Intentalo nuevamente en unos segundos."
+                );
+              } finally {
+                setPendingDeleteReportId((currentReportId) => (
+                  currentReportId === reportId ? null : currentReportId
+                ));
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }, [localDeviceAccountId, pendingDeleteReportId, selectedReport]);
+
+  const updateSelectedOwnReport = useCallback(async (data: ReportUpdateData): Promise<boolean> => {
+    if (!selectedReport || pendingUpdateReportId) {
+      return false;
+    }
+
+    if (!isReportOwnedByLocalAccount(selectedReport, localDeviceAccountId)) {
+      Alert.alert("Accion no disponible", "Solo puedes editar reportes creados desde este dispositivo.");
+      return false;
+    }
+
+    const reportId = selectedReport.$id;
+    setPendingUpdateReportId(reportId);
+
+    try {
+      const updatedReport = await updateReportDocument(reportId, data);
+
+      setReports((currentReports) =>
+        currentReports.map((report) => (report.$id === reportId ? updatedReport : report))
+      );
+      setSelectedReport((currentReport) =>
+        currentReport?.$id === reportId ? updatedReport : currentReport
+      );
+
+      return true;
+    } catch (error) {
+      Alert.alert(
+        "No se pudo guardar",
+        error instanceof Error ? error.message : "Intentalo nuevamente en unos segundos."
+      );
+      return false;
+    } finally {
+      setPendingUpdateReportId((currentReportId) => (
+        currentReportId === reportId ? null : currentReportId
+      ));
+    }
+  }, [localDeviceAccountId, pendingUpdateReportId, selectedReport]);
+
   return {
+    deleteSelectedOwnReport,
     isSelectedReportStatusVoting: selectedReport ? pendingStatusVoteReportId === selectedReport.$id : false,
+    isSelectedReportDeleting: selectedReport ? pendingDeleteReportId === selectedReport.$id : false,
+    isSelectedReportUpdating: selectedReport ? pendingUpdateReportId === selectedReport.$id : false,
     isSelectedReportVoting: selectedReport ? pendingVoteReportId === selectedReport.$id : false,
     reports,
     selectedReport,
+    selectedReportIsOwnReport,
     selectedReportRatingVote,
     selectedReportStatusVote,
     selectReport,
+    updateSelectedOwnReport,
     voteSelectedReport,
     voteSelectedReportStatus,
   };

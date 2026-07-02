@@ -1,17 +1,52 @@
 import { ReportCard } from "@/features/reports/components/ReportCard";
 import { useRealtimeReports } from "@/features/reports/hooks/useRealtimeReports";
 import type { ReportDocument } from "@/services/appwrite";
+import {
+  getLocalDeviceAccountId,
+  isReportOwnedByLocalAccount,
+} from "@/services/device";
 import { router } from "expo-router";
 import { RadioIcon } from "lucide-react-native";
-import { useCallback } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const TAB_BAR_HEIGHT = 68;
+type ReportFeedFilter = "all" | "own";
 
 export default function RssScreen() {
   const insets = useSafeAreaInsets();
   const { error, isLoading, reports } = useRealtimeReports();
+  const [localDeviceAccountId, setLocalDeviceAccountId] = useState<string | null>(null);
+  const [feedFilter, setFeedFilter] = useState<ReportFeedFilter>("all");
+
+  useEffect(() => {
+    let shouldIgnoreAccount = false;
+
+    const loadLocalDeviceAccount = async () => {
+      try {
+        const accountId = await getLocalDeviceAccountId();
+
+        if (!shouldIgnoreAccount) {
+          setLocalDeviceAccountId(accountId);
+        }
+      } catch {
+        // The feed can still show public reports without a local account.
+      }
+    };
+
+    void loadLocalDeviceAccount();
+
+    return () => {
+      shouldIgnoreAccount = true;
+    };
+  }, []);
+
+  const ownReports = useMemo(
+    () => reports.filter((report) => isReportOwnedByLocalAccount(report, localDeviceAccountId)),
+    [localDeviceAccountId, reports]
+  );
+  const visibleReports = feedFilter === "own" ? ownReports : reports;
 
   const handleOpenReportOnMap = useCallback((report: ReportDocument) => {
     router.push({
@@ -55,13 +90,49 @@ export default function RssScreen() {
         </View>
       </View>
 
+      <View style={styles.filterRow}>
+        <Pressable
+          onPress={() => setFeedFilter("all")}
+          style={[
+            styles.filterButton,
+            feedFilter === "all" && styles.filterButtonSelected,
+          ]}
+        >
+          <Text
+            style={[
+              styles.filterButtonText,
+              feedFilter === "all" && styles.filterButtonTextSelected,
+            ]}
+          >
+            Todos
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setFeedFilter("own")}
+          style={[
+            styles.filterButton,
+            feedFilter === "own" && styles.filterButtonSelected,
+          ]}
+        >
+          <Text
+            style={[
+              styles.filterButtonText,
+              feedFilter === "own" && styles.filterButtonTextSelected,
+            ]}
+          >
+            Propios {ownReports.length}
+          </Text>
+        </Pressable>
+      </View>
+
       {error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : null}
 
       <FlatList
         style={styles.list}
-        data={reports}
+        data={visibleReports}
         keyExtractor={(item) => item.$id}
         contentContainerStyle={{
           gap: 14,
@@ -69,11 +140,16 @@ export default function RssScreen() {
         }}
         ListEmptyComponent={
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No hay reportes todavia.</Text>
+            <Text style={styles.emptyText}>
+              {feedFilter === "own" ? "Aun no tienes reportes propios." : "No hay reportes todavia."}
+            </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <ReportCard report={item} onPress={handleOpenReportOnMap} />
+          <ReportCard
+            report={item}
+            onPress={handleOpenReportOnMap}
+          />
         )}
       />
     </View>
@@ -132,6 +208,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     backgroundColor: "#F4F4F4",
+  },
+  filterRow: {
+    minHeight: 42,
+    borderRadius: 999,
+    backgroundColor: "#171717",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    flexDirection: "row",
+    padding: 4,
+    marginBottom: 14,
+    gap: 4,
+  },
+  filterButton: {
+    flex: 1,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  filterButtonSelected: {
+    backgroundColor: "#F4F4F4",
+  },
+  filterButtonText: {
+    color: "#A8A8A8",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  filterButtonTextSelected: {
+    color: "#111111",
   },
   livePillText: {
     color: "#111111",
